@@ -8,22 +8,30 @@ output:
 ---
 
 ## Initialize 
-```{r}
+```{r, setup=TRUE}
 # Set working directory
 setwd("/Users/felix_pacheco/Desktop/DTU/semester4/CoDA_scRNAseq/")
 getwd()
 
 # Import libraries
 library("DESeq2")
+```
 
+```{r}
 # Open dataset
 bulk_counts <- read.csv("data/bulk/counts_bulk.tsv", sep="\t")
-bulk_counts
+
+bulk_counts <- subset(bulk_counts, select = -c(Gene.ID))
+head(bulk_counts)
 ```
 
 ## Prepare Data for DESeq2 Ingestion
 ```{r}
+metadata <- read.csv("data/bulk/metadata_bulk.tsv", sep="\t")
 
+dds <- DESeqDataSetFromTximport(bulk_counts,
+                                   colData = metadata,
+                                   design = ~ condition)
 ```
 
 
