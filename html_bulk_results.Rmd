@@ -1,0 +1,30 @@
+---
+title: "bulk_analysis_classical.R"
+author: "Felix Pacheco"
+date: "3/10/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+## Initialize 
+```{r}
+# Set working directory
+setwd("/Users/felix_pacheco/Desktop/DTU/semester4/CoDA_scRNAseq/")
+getwd()
+
+# Import libraries
+library("DESeq2")
+
+# Open dataset
+bulk_counts <- read.csv("data/bulk/counts_bulk.tsv", sep="\t")
+bulk_counts
+```
+
+## Prepare Data for DESeq2 Ingestion
+```{r}
+
+```
+
+
+
