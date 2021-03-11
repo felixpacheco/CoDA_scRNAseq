@@ -13,8 +13,12 @@ output:
 setwd("/Users/felix_pacheco/Desktop/DTU/semester4/CoDA_scRNAseq/")
 getwd()
 
+remove.packages(c("dplyr", "tidyverse", "ggplot2","DESeq2", "pheatmap"))
+install.packages(c("dplyr", "tidyverse", "ggplot2", "RColorBrewer", "DESeq2"))
+
 # Import libraries
 library("DESeq2")
+library("dplyr")
 library("tidyverse")
 library("pheatmap")
 library("RColorBrewer")
@@ -76,28 +80,26 @@ plotMA(res)
 
 
 ## Heatmap
-````{r}
-select <- order(rowMeans(counts(dds,normalized=TRUE)),
-                decreasing=TRUE)[1:20]
-df <- as.data.frame(colData(dds)[,c("sample_type")])
-pheatmap(assay(ntd)[select,], cluster_rows=FALSE, show_rownames=FALSE,
-         cluster_cols=FALSE, annotation_col=df)
+```{r}
+
 
 ```
 
 ## Correlation
-````{r}
+```{r}
 
 
 # Sample to sample distance heatmap
 sampleDists <- dist(t(assay(vsd)))
 
 sampleDistMatrix <- as.matrix(sampleDists)
-rownames(sampleDistMatrix) <- paste(vsd$condition, vsd$type, sep="-")
+rownames(sampleDistMatrix) <- paste(vsd$sample_type, sep="-")
 colnames(sampleDistMatrix) <- NULL
 colors <- colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
-pheatmap(sampleDistMatrix,
-         clustering_distance_rows=sampleDists,
-         clustering_distance_cols=sampleDists,
-         col=colors)
+
+pheatmap(sampleDistMatrix,col=colors)
 ```
+
+```{r}
+heatmap(sampleDists)
+````
