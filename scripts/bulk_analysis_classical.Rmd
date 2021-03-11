@@ -8,31 +8,96 @@ output:
 ---
 
 ## Initialize 
-```{r, setup=TRUE}
+```{r, include=FALSE}
 # Set working directory
 setwd("/Users/felix_pacheco/Desktop/DTU/semester4/CoDA_scRNAseq/")
 getwd()
 
 # Import libraries
 library("DESeq2")
+library("tidyverse")
+library("pheatmap")
+library("RColorBrewer")
 ```
 
 ```{r}
 # Open dataset
-bulk_counts <- read.csv("data/bulk/counts_bulk.tsv", sep="\t")
+bulk_counts <- read.csv("/Users/felix_pacheco/Desktop/DTU/semester4/CoDA_scRNAseq/data/bulk/counts_bulk.tsv", sep="\t")
 
-bulk_counts <- subset(bulk_counts, select = -c(Gene.ID))
+bulk_counts <- subset(bulk_counts, select = -c(Gene.Name))
 head(bulk_counts)
 ```
 
-## Prepare Data for DESeq2 Ingestion
+## Clean metadata
 ```{r}
-metadata <- read.csv("data/bulk/metadata_bulk.tsv", sep="\t")
+metadata <- read.csv("/Users/felix_pacheco/Desktop/DTU/semester4/CoDA_scRNAseq/data/bulk/metadata_bulk.tsv", sep="\t")
 
-dds <- DESeqDataSetFromTximport(bulk_counts,
+# Clean metadata
+# remove columns with all NA
+metadata <- metadata %>% select_if(~ !all(is.na(.)))
+
+# Rename columns, remove "Sample.Characteristic" and "." at the end of column name
+names(metadata) <- gsub("Sample.Characteristic.", "", names(metadata))
+names(metadata) <- sub(".$", "", names(metadata))
+
+# Drop unused columns
+# Age into only number
+metadata <- metadata %>%
+  rename("Ru" = "run") %>%
+  rename("sampling.site" = "sample_type") %>%
+  select(-contains("Ontology.Term")) %>%
+  separate(age, c("age", "drop")) %>%
+  subset(select = -drop)
+
+coldata <- subset(metadata, select = c(run, sample_type))
+
+```
+
+## Apply DESeq2 to the dataset
+````{r}
+
+dds <- DESeqDataSetFromMatrix(bulk_counts,
                                    colData = metadata,
-                                   design = ~ condition)
+                                   design = ~ sample_type, tidy=TRUE)
+
+dds <- DESeq(dds)
+res <- results(dds)
+head(dds)
+head(results(dds, tidy=TRUE)) 
+
+# Extract transformed values as a count matrix 
+vsd <- vst(dds, blind=FALSE)
+```
+## MA-plot
+````{r}
+plotMA(res)
 ```
 
 
 
+## Heatmap
+````{r}
+select <- order(rowMeans(counts(dds,normalized=TRUE)),
+                decreasing=TRUE)[1:20]
+df <- as.data.frame(colData(dds)[,c("sample_type")])
+pheatmap(assay(ntd)[select,], cluster_rows=FALSE, show_rownames=FALSE,
+         cluster_cols=FALSE, annotation_col=df)
+
+```
+
+## Correlation
+````{r}
+
+
+# Sample to sample distance heatmap
+sampleDists <- dist(t(assay(vsd)))
+
+sampleDistMatrix <- as.matrix(sampleDists)
+rownames(sampleDistMatrix) <- paste(vsd$condition, vsd$type, sep="-")
+colnames(sampleDistMatrix) <- NULL
+colors <- colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
+pheatmap(sampleDistMatrix,
+         clustering_distance_rows=sampleDists,
+         clustering_distance_cols=sampleDists,
+         col=colors)
+```
