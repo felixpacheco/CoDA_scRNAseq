@@ -13,15 +13,7 @@ output:
 setwd("/Users/felix_pacheco/Desktop/DTU/semester4/CoDA_scRNAseq/")
 getwd()
 
-remove.packages(c("dplyr", "tidyverse", "ggplot2","DESeq2", "pheatmap"))
-install.packages(c("dplyr", "tidyverse", "ggplot2", "RColorBrewer", "DESeq2"))
-
-# Import libraries
-library("DESeq2")
-library("dplyr")
 library("tidyverse")
-library("pheatmap")
-library("RColorBrewer")
 ```
 
 ```{r}
@@ -47,14 +39,13 @@ names(metadata) <- sub(".$", "", names(metadata))
 # Drop unused columns
 # Age into only number
 metadata <- metadata %>%
-  rename("Ru" = "run") %>%
-  rename("sampling.site" = "sample_type") %>%
+  rename("run" = "Ru") %>%
+  rename("sample_type" = "sampling.site") %>%
   select(-contains("Ontology.Term")) %>%
   separate(age, c("age", "drop")) %>%
   subset(select = -drop)
 
 coldata <- subset(metadata, select = c(run, sample_type))
-
 ```
 
 ## Apply DESeq2 to the dataset
