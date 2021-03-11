@@ -1,5 +1,6 @@
 library("tidyverse")
 library("DESeq2")
+library("SummarizedExperiment")
 
 # Read the data
 raw_bulk_counts <- read.csv("data/bulk/counts_bulk.tsv", sep = "\t")
@@ -34,30 +35,27 @@ head(results(dds, tidy=TRUE))
 
 summary(res) #summary of results
 
-res_ord <- res[order(res$padj),]
-head(res_ord)
+# Get expression matrix
+expmatrix_dds <- vst(dds, fitType="local")
+expmatrix <- assay(expmatrix_dds)
 
-
-par(mfrow=c(2,3))
-plotCounts(dds, gene="ENSG00000133636", intgroup="sample_type")
-plotCounts(dds, gene="ENSG00000000005", intgroup="sample_type")
-plotCounts(dds, gene="ENSG00000000938", intgroup="sample_type")
-plotCounts(dds, gene="ENSG00000000460", intgroup="sample_type")
-plotCounts(dds, gene="ENSG00000132872", intgroup="sample_type")
-plotCounts(dds, gene="ENSG00000096088", intgroup="sample_type")
 
 # Volcano plot
 #reset par
 par(mfrow=c(1,1))
 # Make a basic volcano plot
 with(res, plot(log2FoldChange, -log10(pvalue), pch=1, main="Volcano plot",xlab="Log2FoldChange", ylab="Log10(pvalue)"))
-# Add colored points: blue if padj<0.01, red if log2FC>1 and padj<0.05)
 with(subset(res, padj<.05 ), points(log2FoldChange, -log10(pvalue), pch=1, col="blue"))
-with(subset(res, padj<.05 & abs(log2FoldChange)>2), points(log2FoldChange, -log10(pvalue), pch=1, col="red"))
+with(subset(res, padj<.05 & abs(log2FoldChange)>1), points(log2FoldChange, -log10(pvalue), pch=1, col="red"))
 abline(h=-log10(.05), col="blue",lty=2)
-abline(h=log10(.05), col="blue",lty=2)
-abline(v=2, col="red",lty=2)
-abline(v=-2, col="red",lty=2)
+abline(v=1, col="red",lty=2)
+abline(v=-1, col="red",lty=2)
+legend()
 
+# Get top 30 high expressed genes
+top <- order(rowMeans(expmatrix),decreasing=TRUE)[1:30]
 
+# Heatmap
+heatmap_data <- data.frame(sample_type = SummarizedExperiment::colData(dds)[,c("sample_type")], row.names = rownames(SummarizedExperiment::colData(dds)))
+pheatmap::pheatmap(expmatrix[top,], cluster_rows=TRUE, show_rownames=TRUE, cluster_cols=TRUE, annotation_col=heatmap_data)
 
