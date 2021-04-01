@@ -24,8 +24,12 @@ metadata <- metadata %>%
 # ----------------------------------------------------------------------------
 # ----------------- ALDEx2 package -------------------------------------------
 # ----------------------------------------------------------------------------
+# the BioCManager packages need to be loaded always after the data wrangling because they interfere
 library("ALDEx2")
 conds <- metadata$sample_type
-x.all <- aldex(bulk_counts, conds, mc.samples=16, test="t", effect=TRUE,
+x.all <- aldex(bulk_counts, conds, mc.samples=128, test="t", effect=TRUE,
                include.sample.summary=FALSE, denom="all", verbose=FALSE)
+
+# MC 128 because the t-test will be accurate
+
 

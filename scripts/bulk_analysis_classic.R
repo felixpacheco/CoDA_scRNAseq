@@ -20,7 +20,7 @@ names(metadata) <- sub(".$", "", names(metadata))
 # Drop unused columns
 # Age into only number
 metadata <- metadata %>%
-  rename(c("Ru" = "run", "sampling.site" = "sample_type")) %>%
+  rename(c("run" = "Ru", "sample_type" = "sampling.site")) %>%
   select(-contains("Ontology.Term")) %>%
   separate(age, c("age", "drop")) %>%
   subset(select = -drop)
