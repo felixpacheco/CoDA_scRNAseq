@@ -1,37 +1,40 @@
 # -------------------- Load the libraries------------------------------------
 library("tidyverse")
-library("DESeq2")
-library("edgeR")
-library("SummarizedExperiment")
 # -------------------- Read the data ----------------------------------------
-raw_bulk_counts <- read.csv("data/bulk/counts_bulk.tsv", sep = "\t")
-metadata <- read.csv("data/bulk/metadata_bulk.tsv", sep = "\t")
+raw_bulk_counts <- read.csv("data/bulk/counts_bulk_patient.tsv", sep = "\t")
+metadata_raw <- read.csv("data/bulk/metadata_bulk.tsv", sep = "\t")
 # ---------------- Wrangle bulk counts --------------------------------------
-bulk_counts <- raw_bulk_counts %>% subset(select = -Gene.Name)
-bulk_counts_edgeR <- raw_bulk_counts %>%
-  subset(select = -Gene.Name) %>%
-  column_to_rownames(var = "Gene.ID")
+bulk_counts_edge <- raw_bulk_counts %>%
+  column_to_rownames(var = "Ensembl_gene_id")
+bulk_counts <- raw_bulk_counts
+bulk_counts[63152,"Ensembl_gene_id"] <-"TC_"
 # -------------------- Clean metadata ---------------------------------------
 # remove columns with all NA
-metadata <- metadata %>% select_if(~ !all(is.na(.)))
+metadata <- metadata_raw %>% select_if(~ !all(is.na(.)))
 # Rename columns, remove "Sample.Characteristic" and "." at the end of column name
 names(metadata) <- gsub("Sample.Characteristic.", "", names(metadata))
 names(metadata) <- sub(".$", "", names(metadata))
 # Drop unused columns
 # Age into only number
 metadata <- metadata %>%
-  rename(c("run" = "Ru", "sample_type" = "sampling.site")) %>%
+  rename("sample_type" = "sampling.site") %>%
   select(-contains("Ontology.Term")) %>%
   separate(age, c("age", "drop")) %>%
-  subset(select = -drop)
+  subset(select = -c(Ru,drop, organism, Factor.Value.sampling.site, Analyse))
+# Now get only metadata per individual not per run
+metadata <- metadata %>% mutate(sample = ifelse(sample_type=='tumor tissue', paste(individual,"T", sep=""), paste(individual,"N", sep="")))
+
+metadata_counts <- metadata %>% group_by(sample) %>% 
+  distinct
 # ----------------------------------------------------------------------------
 # ----------------- DESeq2 package -------------------------------------------
 # ----------------------------------------------------------------------------
+library("DESeq2")
 # Loading data to DESeq2
 # Create DESeq object
 dds_mat <- DESeqDataSetFromMatrix(
   countData = bulk_counts,
-  colData = metadata,
+  colData = metadata_counts,
   design = ~sample_type, tidy = TRUE
 )
 dds <- DESeq(dds_mat)
@@ -45,8 +48,9 @@ res_vsd <- cbind(as.data.frame(res), assay(vsd))
 dge_dds <- as.data.frame(res_vsd[order(res_vsd$pvalue), ])
 head(dge_dds, 10)
 # ----------------------------------------------------------------------------
-# ----------------- EdgeR package -------------------------------------------
+# ----------------- EdgeR package --------------------------------------------
 # ----------------------------------------------------------------------------
+library("edgeR")
 # Loading data to EdgeR
 # Create EdgeR object
 dgeFull <- DGEList(bulk_counts_edgeR, group = metadata$sample_type)
