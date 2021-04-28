@@ -1,5 +1,6 @@
 # -------------------- Load the libraries------------------------------------
 library("tidyverse")
+library("xtable")
 # -------------------- Read the data ----------------------------------------
 raw_bulk_counts <- read.csv("data/bulk/counts_bulk_patient.tsv", sep = "\t")
 metadata_raw <- read.csv("data/bulk/metadata_bulk.tsv", sep = "\t")
@@ -8,6 +9,11 @@ bulk_counts_edge <- raw_bulk_counts %>%
   column_to_rownames(var = "Ensembl_gene_id")
 bulk_counts <- raw_bulk_counts
 bulk_counts[63152,"Ensembl_gene_id"] <-"TC_"
+bulk_counts <- bulk_counts[-c(63152), ] 
+bulk_counts_edge <- bulk_counts_edge[-c(63152), ] 
+# Import head of raw bulk counts to latex table
+xtable(bulk_counts_edge[c(1:5),c(1:4, 39)])
+
 # -------------------- Clean metadata ---------------------------------------
 # remove columns with all NA
 metadata <- metadata_raw %>% select_if(~ !all(is.na(.)))
@@ -53,10 +59,10 @@ head(dge_dds, 10)
 library("edgeR")
 # Loading data to EdgeR
 # Create EdgeR object
-dgeFull <- DGEList(bulk_counts_edgeR, group = metadata$sample_type)
+dgeFull <- DGEList(bulk_counts_edge, group = metadata_counts$sample_type)
 
 # Add sample information to DGE object
-dgeFull$metadata <- metadata
+dgeFull$metadata <- metadata_counts
 dgeFull
 
 # Preparation for differential expression analysis
@@ -78,7 +84,7 @@ dge
 # dgeTest <- exactTest(dge)
 # dgeTest
 # Fit glm function
-sample_type_mat <- relevel(factor(metadata$sample_type), ref = "tumor tissue")
+sample_type_mat <- relevel(factor(metadata_counts$sample_type), ref = "tumor tissue")
 edesign <- model.matrix(~sample_type_mat)
 fit <- glmFit(dge, edesign)
 lrt <- glmLRT(fit)
