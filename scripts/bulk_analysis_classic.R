@@ -5,14 +5,13 @@ library("xtable")
 raw_bulk_counts <- read.csv("data/bulk/counts_bulk_patient.tsv", sep = "\t")
 metadata_raw <- read.csv("data/bulk/metadata_bulk.tsv", sep = "\t")
 # ---------------- Wrangle bulk counts --------------------------------------
-bulk_counts_edge <- raw_bulk_counts %>%
-  column_to_rownames(var = "Ensembl_gene_id")
 bulk_counts <- raw_bulk_counts
 bulk_counts[63152,"Ensembl_gene_id"] <-"TC_"
 bulk_counts <- bulk_counts[-c(63152), ] 
-bulk_counts_edge <- bulk_counts_edge[-c(63152), ] 
+bulk_counts_clean <- bulk_counts[apply(bulk_counts[,-1], 1, function(x) !all(x==0)),]
+
 # Import head of raw bulk counts to latex table
-xtable(bulk_counts_edge[c(1:5),c(1:4, 39)])
+xtable(bulk_counts_clean[c(1:5),c(1:4, 39)])
 
 # -------------------- Clean metadata ---------------------------------------
 # remove columns with all NA
@@ -39,7 +38,7 @@ library("DESeq2")
 # Loading data to DESeq2
 # Create DESeq object
 dds_mat <- DESeqDataSetFromMatrix(
-  countData = bulk_counts,
+  countData = bulk_counts_clean,
   colData = metadata_counts,
   design = ~sample_type, tidy = TRUE
 )
@@ -56,10 +55,14 @@ head(dge_dds, 10)
 # ----------------------------------------------------------------------------
 # ----------------- EdgeR package --------------------------------------------
 # ----------------------------------------------------------------------------
+# Wrangle for edge R
+row.names(bulk_counts_clean) <- bulk_counts_clean$Ensembl_gene_id
+bulk_counts_clean <- bulk_counts_clean[,-1] 
+
 library("edgeR")
 # Loading data to EdgeR
 # Create EdgeR object
-dgeFull <- DGEList(bulk_counts_edge, group = metadata_counts$sample_type)
+dgeFull <- DGEList(bulk_counts_clean, group = metadata_counts$sample_type)
 
 # Add sample information to DGE object
 dgeFull$metadata <- metadata_counts
