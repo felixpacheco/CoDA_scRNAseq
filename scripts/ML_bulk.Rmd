@@ -1,0 +1,204 @@
+---
+title: "ML_bulk"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Libraries and data
+```{r}
+# Load the libraries
+library("tidyverse")
+library("xtable")
+
+# set wd
+setwd("/Users/felix_pacheco/Desktop/DTU/semester4/CoDA_scRNAseq")
+# Read the data 
+raw_bulk_counts <- read.csv("data/bulk/counts_bulk_patient.tsv", sep = "\t")
+metadata_raw <- read.csv("data/bulk/metadata_bulk.tsv", sep = "\t")
+```
+
+## Wrangle Bulk counts
+
+```{r, echo=FALSE}
+#bulk_counts_edge <- raw_bulk_counts %>%
+#  column_to_rownames(var = "Ensembl_gene_id")
+bulk_counts <- raw_bulk_counts
+bulk_counts[63152,"Ensembl_gene_id"] <-"TC_"
+bulk_counts <- bulk_counts[-c(63152), ] 
+# bulk_counts_edge <- bulk_counts_edge[-c(63152), ] 
+# Import head of raw bulk counts to latex table
+# xtable(bulk_counts_edge[c(1:5),c(1:4, 39)])
+
+bulk_counts
+bulk_counts_t = bulk_counts
+```
+
+## Clean metadata 
+```{r, echo=FALSE}
+# remove columns with all NA
+metadata <- metadata_raw %>% select_if(~ !all(is.na(.)))
+# Rename columns, remove "Sample.Characteristic" and "." at the end of column name
+names(metadata) <- gsub("Sample.Characteristic.", "", names(metadata))
+names(metadata) <- sub(".$", "", names(metadata))
+# Drop unused columns
+# Age into only number
+metadata <- metadata %>%
+  rename("sample_type" = "sampling.site") %>%
+  select(-contains("Ontology.Term")) %>%
+  separate(age, c("age", "drop")) %>%
+  subset(select = -c(Ru,drop, organism, Factor.Value.sampling.site, Analyse))
+# Now get only metadata per individual not per run
+metadata <- metadata %>% mutate(sample = ifelse(sample_type=='tumor tissue', paste(individual,"T", sep=""), paste(individual,"N", sep="")))
+
+metadata_counts <- metadata %>% group_by(sample) %>% 
+  distinct
+
+metadata_counts
+```
+
+## K-means clustering 
+```{r, echo=FALSE}
+# Reshape input for kmeans methods
+bulk_counts = as.data.frame(t(as.matrix(bulk_counts)))
+library(janitor)
+library(cluster)
+library(factoextra)
+bulk_counts <- row_to_names(bulk_counts, row_number = 1)
+
+# Compute k-means
+res_means = kmeans(bulk_counts, centers = 2, nstart = 20)
+
+# Process output
+res_viz <- as.data.frame(res_means$cluster)
+names(res_viz)[1] <- "cluster"
+res_viz <- cbind(sample_name = rownames(res_viz), res_viz)
+rownames(res_viz) <- 1:nrow(res_viz)
+
+library(stringr)
+res_viz$phenotype <- str_sub(res_viz$sample_name, -1)
+
+correct_clustering_T =  res_viz[res_viz$cluster==1 & res_viz$phenotype =="T", ]
+correct_clustering_N =  res_viz[res_viz$cluster==2 & res_viz$phenotype =="N", ]
+accuracy = (nrow(correct_clustering_T)+nrow(correct_clustering_N)) / nrow(res_viz)
+```
+
+## Visualize results
+```{r, echo=FALSE}
+# PCA 
+rownames(bulk_counts_t) <- bulk_counts_t[,1]
+bulk_counts_t$Ensembl_gene_id <- NULL
+bulk_countss <- as.data.frame(lapply(bulk_counts, as.numeric))
+res.pca <- prcomp(bulk_countss, scale = FALSE)
+
+df_pca <- as.data.frame(res.pca[["x"]])
+labels <- row.names(bulk_counts)
+df_pca$labels <- labels
+df_pca$phenotype <- str_sub(df_pca$labels, start = 5, end = 5)
+
+
+ggplot(df_pca, aes(x=PC1, y=PC2, color=phenotype)) +
+  geom_point(size=2, shape=1)
+
+# Dimension reduction using PCA
+res.pca <- prcomp(bulk_countss, scale = FALSE)
+# Coordinates of individuals
+ind.coord <- as.data.frame(get_pca_ind(res.pca)$coord)
+# Add clusters obtained using the K-means algorithm
+ind.coord$cluster <- factor(res_means$cluster)
+# Add Species groups from the original data sett
+ind.coord$label <- df_pca$phenotype
+# Data inspection
+head(ind.coord)
+
+# Percentage of variance explained by dimensions
+eigenvalue <- round(get_eigenvalue(res.pca), 1)
+variance.percent <- eigenvalue$variance.percent
+head(eigenvalue)
+
+library(ggpubr)
+
+ggscatter(
+  ind.coord, x = "Dim.1", y = "Dim.2", 
+  color = "cluster", palette = "npg", ellipse = TRUE, ellipse.type = "convex",
+  shape = "label", size = 1.5,  legend = "right", ggtheme = theme_bw(),
+  xlab = paste0("Dim 1 (", variance.percent[1], "% )" ),
+  ylab = paste0("Dim 2 (", variance.percent[2], "% )" )
+) +
+  stat_mean(aes(color = cluster), size = 4)
+
+```
+
+## KNN algorithm
+
+```{r, echo=FALSE}
+set.seed(42)
+ran <- sample(1:nrow(bulk_counts), 0.9 * nrow(bulk_counts)) 
+ 
+##extract training set
+bulk_counts_train <- bulk_counts[ran,] 
+
+##extract testing set
+bulk_counts_test <- bulk_counts[-ran,] 
+
+## extract labels
+target_category <- df_pca$phenotype[ran]
+test_category <- df_pca$phenotype[-ran]
+# Compute KNN function
+library(class)
+
+
+calc_class_err = function(actual, predicted) {
+  mean(actual != predicted)
+}
+
+
+k_to_try = 1:50
+err_k = rep(x = 0, times = length(k_to_try))
+
+for (i in seq_along(k_to_try)) {
+  pred = knn(train = bulk_counts_train, 
+             test  = bulk_counts_test, 
+             cl    = target_category, 
+             k     = k_to_try[i])
+  err_k[i] = calc_class_err(test_category, pred)
+}
+
+# plot error vs choice of k
+plot(err_k, type = "b", col = "dodgerblue", cex = 1, pch = 20, 
+     xlab = "k, number of neighbors", ylab = "classification error",
+     main = "(Test) Error Rate vs Neighbors")
+# add line for min error seen
+abline(h = min(err_k), col = "darkorange", lty = 3)
+# add line for minority prevalence in test set
+abline(h = mean(test_category == "Yes"), col = "grey", lty = 2)
+```
+```{r}
+##run knn function
+pr <- knn(bulk_counts_train, bulk_counts_test, cl=target_category,k=2)
+ 
+##create confusion matrix
+tab <- table(pr,test_category)
+ 
+ ##this function divides the correct predictions by total number of predictions that tell us how accurate the model is.
+ 
+accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
+accuracy(tab)
+
+# Plot decision boundary
+
+library(caret)
+input_kk <- bulk_counts
+input_kk$class <- str_sub(row.names(input_kk), start = 5, end = 5)
+
+input_kk <- input_kk %>% 
+  mutate(label=ifelse(class=="T", 1,2))
+
+input_kk = subset(input_kk, select=-c(class))
+
+model <- knn3(label ~ ., data=input_kk, k = 2)
+decisionplot(model, x, class = "class", main = "kNN (1)")
+```
