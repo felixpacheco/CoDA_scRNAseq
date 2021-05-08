@@ -16,7 +16,7 @@ par(mfrow=c(1,3))
 with(deseq, plot(log2FoldChange, -log10(pvalue),pch=1, main="Volcano plot: DESeq2",xlab="Log2FoldChange", ylab="Log10(pvalue)"))
 #with(subset(deseq, padj>0.5), points(log2FoldChange, -log10(pvalue), pch=20, col="gray"))
 with(subset(deseq, log2FoldChange < -1 & padj<0.5), points(log2FoldChange, -log10(pvalue), pch=1, col="red"))
-with(subset(deseq, log2FoldChange > 1 & padj<0.5), points(log2FoldChange, -log10(pvalue), pch=1, col="green"))
+with(subset(deseq, log2FoldChange > 1 & padj<0.5), points(log2FoldChange, -log10(pvalue), pch=1, col="blue"))
 abline(h = 1, col = "blue", lty = 2, lwd = 1)
 abline(v = c(-1,1), col = "blue", lty = 2, lwd = 1)
 
@@ -24,7 +24,7 @@ abline(v = c(-1,1), col = "blue", lty = 2, lwd = 1)
 with(edge, plot(logFC, -log10(PValue),pch=1, main="Volcano plot: EdgeR",xlab="Log2FoldChange", ylab="Log10(pvalue)"))
 #with(subset(edge, FDR>0.5), points(logFC, -log10(PValue), pch=20, col="gray"))
 with(subset(edge, logFC < -1 & FDR<0.5), points(logFC, -log10(PValue), pch=1, col="red"))
-with(subset(edge, logFC > 1 & FDR<0.5), points(logFC, -log10(PValue), pch=1, col="green"))
+with(subset(edge, logFC > 1 & FDR<0.5), points(logFC, -log10(PValue), pch=1, col="blue"))
 abline(h = 1, col = "blue", lty = 2, lwd = 1)
 abline(v = c(-1,1), col = "blue", lty = 2, lwd = 1)
 
@@ -33,7 +33,7 @@ abline(v = c(-1,1), col = "blue", lty = 2, lwd = 1)
 with(aldex, plot(diff.btw, -log10(we.ep), pch=1, main="Volcano plot: ALDEx2",xlab="Log2FoldChange", ylab="Log10(pvalue)"))
 #with(subset(aldex, we.eBH>0.5), points(diff.btw, -log10(we.ep), pch=20, col="gray"))
 with(subset(aldex, diff.btw < -1 & we.eBH<0.5), points(diff.btw, -log10(we.ep), pch=1, col="red"))
-with(subset(aldex, diff.btw > 1 & we.eBH<0.5), points(diff.btw, -log10(we.ep), pch=1, col="green"))
+with(subset(aldex, diff.btw > 1 & we.eBH<0.5), points(diff.btw, -log10(we.ep), pch=1, col="blue"))
 abline(h = 1, col = "blue", lty = 2, lwd = 1)
 abline(v = c(-1,1), col = "blue", lty = 2, lwd = 1)
 
@@ -60,9 +60,6 @@ deseq_up %>%
   ) +
   ggtitle("A boxplot with jitter") +
   xlab("")
-
-# ------------------- STATISTICAL ANALYSIS ----------------------------
-
 
 
 
