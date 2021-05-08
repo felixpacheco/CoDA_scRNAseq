@@ -10,105 +10,240 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Libraries and data
 ```{r}
+rm(list=ls())
+set.seed(123)
 # Load the libraries
 library("tidyverse")
 library("xtable")
 
-# set wd
-setwd("/Users/felix_pacheco/Desktop/DTU/semester4/CoDA_scRNAseq")
 # Read the data 
-raw_bulk_counts <- read.csv("data/bulk/counts_bulk_patient.tsv", sep = "\t")
-metadata_raw <- read.csv("data/bulk/metadata_bulk.tsv", sep = "\t")
+bulk_counts <- read.csv("/home/people/felpas/CoDA_scRNAseq/data/bulk/counts_bulk_patient.tsv", sep = "\t")
+deseq_counts <- read.csv(unz("/home/people/felpas/CoDA_scRNAseq/results/bulk/deseq2_DE.csv.zip","deseq2_DE.csv"))
+edge_counts <- read.csv(unz("/home/people/felpas/CoDA_scRNAseq/results/bulk/edgeR_DE.csv.zip", "edgeR_DE.csv"))
+aldex_counts <- read.csv(unz("/home/people/felpas/CoDA_scRNAseq/results/bulk/aldex2_clr.csv.zip", "aldex2_clr.csv"))
+
+
 ```
 
-## Wrangle Bulk counts
+## Wrangle counts on different inputs
 
 ```{r, echo=FALSE}
-#bulk_counts_edge <- raw_bulk_counts %>%
-#  column_to_rownames(var = "Ensembl_gene_id")
-bulk_counts <- raw_bulk_counts
+# Clean bulk counts by erasing all 0 columns
 bulk_counts[63152,"Ensembl_gene_id"] <-"TC_"
 bulk_counts <- bulk_counts[-c(63152), ] 
-# bulk_counts_edge <- bulk_counts_edge[-c(63152), ] 
-# Import head of raw bulk counts to latex table
-# xtable(bulk_counts_edge[c(1:5),c(1:4, 39)])
+bulk_counts<- bulk_counts[apply(bulk_counts[,-1], 1, function(x) !all(x==0)),]
 
-bulk_counts
-bulk_counts_t = bulk_counts
+# Remove non-relevant columns for the ML algorithms
+deseq_counts <- subset(deseq_counts, select = -c(baseMean,log2FoldChange,lfcSE, stat,pvalue,padj))
+edge_counts <- subset(edge_counts, select = -c(logCPM,PValue,dispersion, logFC,LR,FDR))
+
+
 ```
 
-## Clean metadata 
+## K-means clustering
+
 ```{r, echo=FALSE}
-# remove columns with all NA
-metadata <- metadata_raw %>% select_if(~ !all(is.na(.)))
-# Rename columns, remove "Sample.Characteristic" and "." at the end of column name
-names(metadata) <- gsub("Sample.Characteristic.", "", names(metadata))
-names(metadata) <- sub(".$", "", names(metadata))
-# Drop unused columns
-# Age into only number
-metadata <- metadata %>%
-  rename("sample_type" = "sampling.site") %>%
-  select(-contains("Ontology.Term")) %>%
-  separate(age, c("age", "drop")) %>%
-  subset(select = -c(Ru,drop, organism, Factor.Value.sampling.site, Analyse))
-# Now get only metadata per individual not per run
-metadata <- metadata %>% mutate(sample = ifelse(sample_type=='tumor tissue', paste(individual,"T", sep=""), paste(individual,"N", sep="")))
-
-metadata_counts <- metadata %>% group_by(sample) %>% 
-  distinct
-
-metadata_counts
-```
-
-## K-means clustering 
-```{r, echo=FALSE}
-# Reshape input for kmeans methods
-bulk_counts = as.data.frame(t(as.matrix(bulk_counts)))
+# Libraries used for clustering
 library(janitor)
 library(cluster)
 library(factoextra)
-bulk_counts <- row_to_names(bulk_counts, row_number = 1)
+
+### ---------- RAW DATA -----------
+
+# Reshape input for k-means methods
+bulk_counts_t = as.data.frame(t(as.matrix(bulk_counts)))
+
+bulk_counts_t <- row_to_names(bulk_counts_t, row_number = 1)
 
 # Compute k-means
-res_means = kmeans(bulk_counts, centers = 2, nstart = 20)
+res_means_raw = kmeans(bulk_counts_t, centers = 2, nstart = 20)
 
 # Process output
-res_viz <- as.data.frame(res_means$cluster)
-names(res_viz)[1] <- "cluster"
-res_viz <- cbind(sample_name = rownames(res_viz), res_viz)
-rownames(res_viz) <- 1:nrow(res_viz)
+res_viz_raw <- as.data.frame(res_means_raw$cluster)
+names(res_viz_raw)[1] <- "cluster"
+res_viz_raw <- cbind(sample_name = rownames(res_viz_raw), res_viz_raw)
+rownames(res_viz_raw) <- 1:nrow(res_viz_raw)
 
 library(stringr)
-res_viz$phenotype <- str_sub(res_viz$sample_name, -1)
+res_viz_raw$phenotype <- str_sub(res_viz_raw$sample_name, 5)
+res_viz_raw$phenotype <- str_sub(res_viz_raw$phenotype, start=1,end=1)
 
-correct_clustering_T =  res_viz[res_viz$cluster==1 & res_viz$phenotype =="T", ]
-correct_clustering_N =  res_viz[res_viz$cluster==2 & res_viz$phenotype =="N", ]
-accuracy = (nrow(correct_clustering_T)+nrow(correct_clustering_N)) / nrow(res_viz)
+correct_clustering_T =  res_viz_raw[res_viz_raw$cluster==1 & res_viz_raw$phenotype =="T", ]
+correct_clustering_N =  res_viz_raw[res_viz_raw$cluster==2 & res_viz_raw$phenotype =="N", ]
+accuracy_raw = (nrow(correct_clustering_T)+nrow(correct_clustering_N)) / nrow(res_viz_raw)
+
+
+### ---------- DESeq2 normalized data -----------
+
+# Reshape input for k-means methods
+deseq_counts_t = as.data.frame(t(as.matrix(deseq_counts)))
+
+deseq_counts_t <- row_to_names(deseq_counts_t, row_number = 1)
+
+# Compute k-means
+res_means_deseq = kmeans(deseq_counts_t, centers = 2, nstart = 20)
+
+# Process output
+res_viz_deseq <- as.data.frame(res_means_deseq$cluster)
+names(res_viz_deseq)[1] <- "cluster"
+res_viz_deseq <- cbind(sample_name = rownames(res_viz_deseq), res_viz_deseq)
+rownames(res_viz_deseq) <- 1:nrow(res_viz_deseq)
+
+library(stringr)
+res_viz_deseq$phenotype <- str_sub(res_viz_deseq$sample_name, 5)
+res_viz_deseq$phenotype <- str_sub(res_viz_deseq$phenotype, start=1,end=1)
+
+correct_clustering_T =  res_viz_deseq[res_viz_deseq$cluster==1 & res_viz_deseq$phenotype =="T", ]
+correct_clustering_N =  res_viz_deseq[res_viz_deseq$cluster==2 & res_viz_deseq$phenotype =="N", ]
+accuracy_deseq = (nrow(correct_clustering_T)+nrow(correct_clustering_N)) / nrow(res_viz_deseq)
+
+
+
+### ---------- edgeR DATA -----------
+
+# Reshape input for k-means methods
+edge_counts_t = as.data.frame(t(as.matrix(edge_counts)))
+
+edge_counts_t <- row_to_names(edge_counts_t, row_number = 1)
+
+# Compute k-means
+res_means_edge = kmeans(edge_counts_t, centers = 2, nstart = 20)
+
+# Process output
+res_viz_edge <- as.data.frame(res_means_edge$cluster)
+names(res_viz_edge)[1] <- "cluster"
+res_viz_edge <- cbind(sample_name = rownames(res_viz_edge), res_viz_edge)
+rownames(res_viz_edge) <- 1:nrow(res_viz_edge)
+
+library(stringr)
+res_viz_edge$phenotype <- str_sub(res_viz_edge$sample_name, 5)
+res_viz_edge$phenotype <- str_sub(res_viz_edge$phenotype, start=1,end=1)
+
+correct_clustering_T =  res_viz_edge[res_viz_edge$cluster==1 & res_viz_edge$phenotype =="T", ]
+correct_clustering_N =  res_viz_edge[res_viz_edge$cluster==2 & res_viz_edge$phenotype =="N", ]
+accuracy_edge = (nrow(correct_clustering_T)+nrow(correct_clustering_N)) / nrow(res_viz_edge)
+
+
+
+### ---------- ALDEx2 DATA -----------
+
+# Reshape input for k-means methods
+aldex_counts_t = as.data.frame(t(as.matrix(aldex_counts)))
+
+aldex_counts_t <- row_to_names(aldex_counts_t, row_number = 1)
+
+# Compute k-means
+res_means_aldex = kmeans(aldex_counts_t, centers = 2, nstart = 20)
+
+# Process output
+res_viz_aldex <- as.data.frame(res_means_aldex$cluster)
+names(res_viz_aldex)[1] <- "cluster"
+res_viz_aldex <- cbind(sample_name = rownames(res_viz_aldex), res_viz_aldex)
+rownames(res_viz_aldex) <- 1:nrow(res_viz_aldex)
+
+library(stringr)
+res_viz_aldex$phenotype <- str_sub(res_viz_aldex$sample_name, 5)
+res_viz_aldex$phenotype <- str_sub(res_viz_aldex$phenotype, start=1,end=1)
+
+correct_clustering_T =  res_viz_aldex[res_viz_aldex$cluster==1 & res_viz_aldex$phenotype =="T", ]
+correct_clustering_N =  res_viz_aldex[res_viz_aldex$cluster==2 & res_viz_aldex$phenotype =="N", ]
+accuracy_aldex = (nrow(correct_clustering_T)+nrow(correct_clustering_N)) / nrow(res_viz_aldex)
+
+
+r1T <- nrow(res_viz_raw[res_viz_raw$cluster==1 & res_viz_raw$phenotype=="T",])/nrow(res_viz_raw[res_viz_raw$cluster==1,]) 
+r1N <- nrow(res_viz_raw[res_viz_raw$cluster==1 & res_viz_raw$phenotype=="N",])/nrow(res_viz_raw[res_viz_raw$cluster==1,]) 
+r2N <- nrow(res_viz_raw[res_viz_raw$cluster==2 & res_viz_raw$phenotype=="N",])/nrow(res_viz_raw[res_viz_raw$cluster==2,]) 
+r2T <- nrow(res_viz_raw[res_viz_raw$cluster==2 & res_viz_raw$phenotype=="T",])/nrow(res_viz_raw[res_viz_raw$cluster==2,]) 
+
+d1T <- nrow(res_viz_deseq[res_viz_deseq$cluster==1 & res_viz_deseq$phenotype=="T",])/nrow(res_viz_deseq[res_viz_deseq$cluster==1,]) 
+d1N <- nrow(res_viz_deseq[res_viz_deseq$cluster==1 & res_viz_deseq$phenotype=="N",])/nrow(res_viz_deseq[res_viz_deseq$cluster==1,]) 
+d2N <- nrow(res_viz_deseq[res_viz_deseq$cluster==2 & res_viz_deseq$phenotype=="N",])/nrow(res_viz_deseq[res_viz_deseq$cluster==2,]) 
+d2T <- nrow(res_viz_deseq[res_viz_deseq$cluster==2 & res_viz_deseq$phenotype=="T",])/nrow(res_viz_deseq[res_viz_deseq$cluster==2,]) 
+
+e1T <- nrow(res_viz_edge[res_viz_edge$cluster==1 & res_viz_edge$phenotype=="T",])/nrow(res_viz_edge[res_viz_edge$cluster==1,])
+e1N <- nrow(res_viz_edge[res_viz_edge$cluster==1 & res_viz_edge$phenotype=="N",])/nrow(res_viz_edge[res_viz_edge$cluster==1,]) 
+e2N <- nrow(res_viz_edge[res_viz_edge$cluster==2 & res_viz_edge$phenotype=="N",])/nrow(res_viz_edge[res_viz_edge$cluster==2,]) 
+e2T <- nrow(res_viz_edge[res_viz_edge$cluster==2 & res_viz_edge$phenotype=="T",])/nrow(res_viz_edge[res_viz_edge$cluster==2,]) 
+
+a1T <- nrow(res_viz_aldex[res_viz_aldex$cluster==1 & res_viz_aldex$phenotype=="T",])/nrow(res_viz_aldex[res_viz_aldex$cluster==1,]) 
+a1N <- nrow(res_viz_aldex[res_viz_aldex$cluster==1 & res_viz_aldex$phenotype=="N",])/nrow(res_viz_aldex[res_viz_aldex$cluster==1,]) 
+a2N <- nrow(res_viz_aldex[res_viz_aldex$cluster==2 & res_viz_aldex$phenotype=="N",])/nrow(res_viz_aldex[res_viz_aldex$cluster==2,]) 
+a2T <- nrow(res_viz_aldex[res_viz_aldex$cluster==2 & res_viz_aldex$phenotype=="T",])/nrow(res_viz_aldex[res_viz_aldex$cluster==2,]) 
+
+if (r1T>r1N) {
+cat("Raw data -- Cluster purity:\n\tCluster 1:")
+cat(r1T)
+cat("\n\tCluster 2:")
+cat(r2N)
+cat("\n")
+} else {
+cat("Cluster purity:\n\tCluster 1:")
+cat(r1N)
+cat("\n\tCluster 2:")
+cat(r2T)
+cat("\n")
+}
+
+if (d1T>d1N) {
+cat("DESeq2 data -- Cluster purity:\n\tCluster 1:")
+cat(d1T)
+cat("\n\tCluster 2:")
+cat(d2N)
+cat("\n")
+} else {
+cat("DESeq2 data -- Cluster purity:\n\tCluster 1:")
+cat(d1N)
+cat("\n\tCluster 2:")
+cat(d2T)
+cat("\n")
+}
+
+if (e1T>e1N) {
+cat("EdgeR data -- Cluster purity:\n\tCluster 1:")
+cat(e1T)
+cat("\n\tCluster 2:")
+cat(e2N)
+cat("\n")
+} else {
+cat("EdgeR data -- Cluster purity:\n\tCluster 1:")
+cat(e1N)
+cat("\n\tCluster 2:")
+cat(e2T)
+cat("\n")
+}
+
+if (a1T>a1N) {
+cat("ALDEx2 data -- Cluster purity:\n\tCluster 1:")
+cat(a1T)
+cat("\n\tCluster 2:")
+cat(a2N)
+} else {
+cat("ALDEx2 data -- Cluster purity:\n\tCluster 1:")
+cat(a1N)
+cat("\n\tCluster 2:")
+cat(a2T)
+}
 ```
 
-## Visualize results
+## Visualize results for K-means clustering 
 ```{r, echo=FALSE}
 # PCA 
-rownames(bulk_counts_t) <- bulk_counts_t[,1]
-bulk_counts_t$Ensembl_gene_id <- NULL
-bulk_countss <- as.data.frame(lapply(bulk_counts, as.numeric))
+#rownames(bulk_counts) <- bulk_counts[,1]
+#bulk_counts$Ensembl_gene_id <- NULL
+bulk_countss <- as.data.frame(lapply(bulk_counts_t, as.numeric))
 res.pca <- prcomp(bulk_countss, scale = FALSE)
 
 df_pca <- as.data.frame(res.pca[["x"]])
-labels <- row.names(bulk_counts)
+labels <- row.names(bulk_counts_t)
 df_pca$labels <- labels
 df_pca$phenotype <- str_sub(df_pca$labels, start = 5, end = 5)
-
-
-ggplot(df_pca, aes(x=PC1, y=PC2, color=phenotype)) +
-  geom_point(size=2, shape=1)
 
 # Dimension reduction using PCA
 res.pca <- prcomp(bulk_countss, scale = FALSE)
 # Coordinates of individuals
 ind.coord <- as.data.frame(get_pca_ind(res.pca)$coord)
 # Add clusters obtained using the K-means algorithm
-ind.coord$cluster <- factor(res_means$cluster)
+ind.coord$cluster <- factor(res_means_raw$cluster)
 # Add Species groups from the original data sett
 ind.coord$label <- df_pca$phenotype
 # Data inspection
@@ -130,13 +265,122 @@ ggscatter(
 ) +
   stat_mean(aes(color = cluster), size = 4)
 
+
+##---------- DESeq2 -----------
+
+deseq_countss <- as.data.frame(lapply(deseq_counts_t, as.numeric))
+res.pca_deseq <- prcomp(deseq_countss, scale = FALSE)
+
+df_pca_deseq <- as.data.frame(res.pca_deseq[["x"]])
+labels <- row.names(deseq_counts_t)
+df_pca_deseq$labels <- labels
+df_pca_deseq$phenotype <- str_sub(df_pca_deseq$labels, start = 5, end = 5)
+
+# Dimension reduction using PCA
+res.pca_deseq <- prcomp(deseq_countss, scale = FALSE)
+# Coordinates of individuals
+ind.coord <- as.data.frame(get_pca_ind(res.pca_deseq)$coord)
+# Add clusters obtained using the K-means algorithm
+ind.coord$cluster <- factor(res_means_deseq$cluster)
+# Add Species groups from the original data sett
+ind.coord$label <- df_pca_deseq$phenotype
+# Data inspection
+head(ind.coord)
+
+# Percentage of variance explained by dimensions
+eigenvalue <- round(get_eigenvalue(res.pca_deseq), 1)
+variance.percent <- eigenvalue$variance.percent
+head(eigenvalue)
+
+ggscatter(
+  ind.coord, x = "Dim.1", y = "Dim.2", 
+  color = "cluster", palette = "npg", ellipse = TRUE, ellipse.type = "convex",
+  shape = "label", size = 1.5,  legend = "right", ggtheme = theme_bw(),
+  xlab = paste0("Dim 1 (", variance.percent[1], "% )" ),
+  ylab = paste0("Dim 2 (", variance.percent[2], "% )" )
+) +
+  stat_mean(aes(color = cluster), size = 4)
+
+
+##---------- edgeR-----------
+
+edge_countss <- as.data.frame(lapply(edge_counts_t, as.numeric))
+res.pca_edge <- prcomp(edge_countss, scale = FALSE)
+
+df_pca_edge <- as.data.frame(res.pca_edge[["x"]])
+labels <- row.names(edge_counts_t)
+df_pca_edge$labels <- labels
+df_pca_edge$phenotype <- str_sub(df_pca_edge$labels, start = 5, end = 5)
+
+# Dimension reduction using PCA
+res.pca_edge <- prcomp(edge_countss, scale = FALSE)
+# Coordinates of individuals
+ind.coord <- as.data.frame(get_pca_ind(res.pca_edge)$coord)
+# Add clusters obtained using the K-means algorithm
+ind.coord$cluster <- factor(res_means_edge$cluster)
+# Add Species groups from the original data sett
+ind.coord$label <- df_pca_edge$phenotype
+# Data inspection
+head(ind.coord)
+
+# Percentage of variance explained by dimensions
+eigenvalue <- round(get_eigenvalue(res.pca_edge), 1)
+variance.percent <- eigenvalue$variance.percent
+head(eigenvalue)
+
+ggscatter(
+  ind.coord, x = "Dim.1", y = "Dim.2", 
+  color = "cluster", palette = "npg", ellipse = TRUE, ellipse.type = "convex",
+  shape = "label", size = 1.5,  legend = "right", ggtheme = theme_bw(),
+  xlab = paste0("Dim 1 (", variance.percent[1], "% )" ),
+  ylab = paste0("Dim 2 (", variance.percent[2], "% )" )
+) +
+  stat_mean(aes(color = cluster), size = 4)
+
+
+##---------- ALDEx2-----------
+
+aldex_countss <- as.data.frame(lapply(aldex_counts_t, as.numeric))
+res.pca_aldex <- prcomp(aldex_countss, scale = FALSE)
+
+df_pca_aldex <- as.data.frame(res.pca_aldex[["x"]])
+labels <- row.names(aldex_counts_t)
+df_pca_aldex$labels <- labels
+df_pca_aldex$phenotype <- str_sub(df_pca_aldex$labels, start = 5, end = 5)
+
+# Dimension reduction using PCA
+res.pca_aldex <- prcomp(aldex_countss, scale = FALSE)
+# Coordinates of individuals
+ind.coord <- as.data.frame(get_pca_ind(res.pca_aldex)$coord)
+# Add clusters obtained using the K-means algorithm
+ind.coord$cluster <- factor(res_means_aldex$cluster)
+# Add Species groups from the original data sett
+ind.coord$label <- df_pca_aldex$phenotype
+# Data inspection
+head(ind.coord)
+
+# Percentage of variance explained by dimensions
+eigenvalue <- round(get_eigenvalue(res.pca_aldex), 1)
+variance.percent <- eigenvalue$variance.percent
+head(eigenvalue)
+
+ggscatter(
+  ind.coord, x = "Dim.1", y = "Dim.2", 
+  color = "cluster", palette = "npg", ellipse = TRUE, ellipse.type = "convex",
+  shape = "label", size = 1.5,  legend = "right", ggtheme = theme_bw(),
+  xlab = paste0("Dim 1 (", variance.percent[1], "% )" ),
+  ylab = paste0("Dim 2 (", variance.percent[2], "% )" )
+) +
+  stat_mean(aes(color = cluster), size = 4)
+
 ```
 
 ## KNN algorithm
 
-```{r, echo=FALSE}
+```{r}
+## KNN algorithm
 set.seed(42)
-ran <- sample(1:nrow(bulk_counts), 0.9 * nrow(bulk_counts)) 
+ran <- sample(1:nrow(bulk_counts), 0.1 * nrow(bulk_counts)) 
  
 ##extract training set
 bulk_counts_train <- bulk_counts[ran,] 
@@ -150,13 +394,9 @@ test_category <- df_pca$phenotype[-ran]
 # Compute KNN function
 library(class)
 
+accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
 
-calc_class_err = function(actual, predicted) {
-  mean(actual != predicted)
-}
-
-
-k_to_try = 1:50
+k_to_try = 1:20
 err_k = rep(x = 0, times = length(k_to_try))
 
 for (i in seq_along(k_to_try)) {
@@ -164,41 +404,144 @@ for (i in seq_along(k_to_try)) {
              test  = bulk_counts_test, 
              cl    = target_category, 
              k     = k_to_try[i])
-  err_k[i] = calc_class_err(test_category, pred)
+  tab = table(pred, test_category)
+  err_k[i] <- accuracy(tab)
+}
+
+
+ran <- sample(1:nrow(bulk_counts), 0.25 * nrow(bulk_counts)) 
+ 
+##extract training set
+bulk_counts_train <- bulk_counts[ran,] 
+
+##extract testing set
+bulk_counts_test <- bulk_counts[-ran,] 
+
+## extract labels
+target_category <- df_pca$phenotype[ran]
+test_category <- df_pca$phenotype[-ran]
+# Compute KNN function
+
+accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
+
+k_to_try = 1:20
+err_k_25 = rep(x = 0, times = length(k_to_try))
+
+for (i in seq_along(k_to_try)) {
+  pred = knn(train = bulk_counts_train, 
+             test  = bulk_counts_test, 
+             cl    = target_category, 
+             k     = k_to_try[i])
+  tab = table(pred, test_category)
+  err_k_25[i] <- accuracy(tab)
+}
+
+ran <- sample(1:nrow(bulk_counts), 0.5 * nrow(bulk_counts)) 
+ 
+##extract training set
+bulk_counts_train <- bulk_counts[ran,] 
+
+##extract testing set
+bulk_counts_test <- bulk_counts[-ran,] 
+
+## extract labels
+target_category <- df_pca$phenotype[ran]
+test_category <- df_pca$phenotype[-ran]
+# Compute KNN function
+
+accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
+
+k_to_try = 1:20
+err_k_50 = rep(x = 0, times = length(k_to_try))
+
+for (i in seq_along(k_to_try)) {
+  pred = knn(train = bulk_counts_train, 
+             test  = bulk_counts_test, 
+             cl    = target_category, 
+             k     = k_to_try[i])
+  tab = table(pred, test_category)
+  err_k_50[i] <- accuracy(tab)
+}
+
+ran <- sample(1:nrow(bulk_counts), 0.75 * nrow(bulk_counts)) 
+ 
+##extract training set
+bulk_counts_train <- bulk_counts[ran,] 
+
+##extract testing set
+bulk_counts_test <- bulk_counts[-ran,] 
+
+## extract labels
+target_category <- df_pca$phenotype[ran]
+test_category <- df_pca$phenotype[-ran]
+# Compute KNN function
+
+accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
+
+k_to_try = 1:20
+err_k_75 = rep(x = 0, times = length(k_to_try))
+
+for (i in seq_along(k_to_try)) {
+  pred = knn(train = bulk_counts_train, 
+             test  = bulk_counts_test, 
+             cl    = target_category, 
+             k     = k_to_try[i])
+  tab = table(pred, test_category)
+  err_k_75[i] <- accuracy(tab)
+}
+
+
+ran <- sample(1:nrow(bulk_counts), 0.90 * nrow(bulk_counts)) 
+##extract training set
+bulk_counts_train <- bulk_counts[ran,] 
+
+##extract testing set
+bulk_counts_test <- bulk_counts[-ran,] 
+
+## extract labels
+target_category <- df_pca$phenotype[ran]
+test_category <- df_pca$phenotype[-ran]
+# Compute KNN function
+
+accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
+
+k_to_try = 1:20
+err_k_90 = rep(x = 0, times = length(k_to_try))
+
+for (i in seq_along(k_to_try)) {
+  pred = knn(train = bulk_counts_train, 
+             test  = bulk_counts_test, 
+             cl    = target_category, 
+             k     = k_to_try[i])
+  tab = table(pred, test_category)
+  err_k_90[i] <- accuracy(tab)
 }
 
 # plot error vs choice of k
-plot(err_k, type = "b", col = "dodgerblue", cex = 1, pch = 20, 
-     xlab = "k, number of neighbors", ylab = "classification error",
-     main = "(Test) Error Rate vs Neighbors")
+plot(err_k, type = "b", col = "darkolivegreen4",
+     lty = 1, xlab = "k, number of neighbors", ylab = "Accuracy",
+     main = "Accuracy with k-neighbors",ylim=c(85,103))
 # add line for min error seen
-abline(h = min(err_k), col = "darkorange", lty = 3)
+#abline(h = min(err_k), col = "darkorange", lty = 3)
+lines(k_to_try, err_k_25, type = "b", lty = 1, col='deepskyblue')
+lines(k_to_try, err_k_50, type = "b", lty = 1, col='firebrick1')
+lines(k_to_try, err_k_75, type = "b", lty = 1, col='deeppink1')
+lines(k_to_try, err_k_90, type = "b", lty = 1, col='orange2')
+
+legend("bottomleft", 
+  legend = c('10/90','25/75','50/50', '75/25','90/10'),
+  col = c('darkolivegreen4','deepskyblue','firebrick1', 'deeppink1', 'orange2'),
+  pch = c(20,20,20,20,20), 
+  text.col = "black")
 # add line for minority prevalence in test set
-abline(h = mean(test_category == "Yes"), col = "grey", lty = 2)
+#abline(h = mean(test_category == "Yes"), col = "grey", lty = 2)
+
+plot(err_k_90, type = "b", col = "darkolivegreen4",
+     lty = 1, xlab = "k, number of neighbors", ylab = "Accuracy",
+     main = "Accuracy with k-neighbors")
 ```
+
+
 ```{r}
-##run knn function
-pr <- knn(bulk_counts_train, bulk_counts_test, cl=target_category,k=2)
- 
-##create confusion matrix
-tab <- table(pr,test_category)
- 
- ##this function divides the correct predictions by total number of predictions that tell us how accurate the model is.
- 
-accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
-accuracy(tab)
 
-# Plot decision boundary
-
-library(caret)
-input_kk <- bulk_counts
-input_kk$class <- str_sub(row.names(input_kk), start = 5, end = 5)
-
-input_kk <- input_kk %>% 
-  mutate(label=ifelse(class=="T", 1,2))
-
-input_kk = subset(input_kk, select=-c(class))
-
-model <- knn3(label ~ ., data=input_kk, k = 2)
-decisionplot(model, x, class = "class", main = "kNN (1)")
 ```
