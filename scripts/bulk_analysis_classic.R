@@ -86,7 +86,7 @@ dge
 # Exact test for the difference in expression between two sample types
 # dgeTest <- exactTest(dge)
 # dgeTest
-# Fit glm function
+# Fit glm function for log-likelihood ratio test (LTR)
 sample_type_mat <- relevel(factor(metadata_counts$sample_type), ref = "tumor tissue")
 edesign <- model.matrix(~sample_type_mat)
 fit <- glmFit(dge, edesign)
@@ -98,6 +98,7 @@ rownames(res_edgeR) <- res_edgeR$Row.names
 res_edgeR$Row.names <- NULL
 res_edgeR <- res_edgeR[order(res_edgeR$PValue), ]
 head(res_edgeR, 10)
+
 
 # ----------------- Outfiles -----------------------------
 # Write to file
