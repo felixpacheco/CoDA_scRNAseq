@@ -140,12 +140,9 @@ png(file = "heatmap_edge_norm_counts.png", height = 7, width = 10, units = "in",
 p3 <- ggplot(long_random_edge_norm, aes(x = colname, y = rowname, fill = norm)) +
   geom_tile() +
   labs(x = "Patient ID", y = "Gene ID", tag = "C", fill = "Counts") +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
   theme(
-    axis.title.y = element_blank(),
-    axis.text.y = element_blank(),
-    axis.ticks.y = element_blank(),
-    text = element_text(size = 20)
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+    legend.position = "none", text = element_text(size = 20)
   ) +
   scale_fill_viridis(discrete = FALSE) 
   #scale_x_discrete(breaks=long_random_edge_norm$colname[seq(1,length(long_random_edge_norm$colname),by=10)])
