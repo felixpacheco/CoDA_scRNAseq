@@ -15,6 +15,9 @@ set.seed(123)
 # Load the libraries
 library("tidyverse")
 library("xtable")
+library(janitor)
+library(cluster)
+library(factoextra)
 
 # Read the data 
 bulk_counts <- read.csv("/home/people/felpas/CoDA_scRNAseq/data/bulk/counts_bulk_patient.tsv", sep = "\t")
@@ -37,23 +40,29 @@ bulk_counts<- bulk_counts[apply(bulk_counts[,-1], 1, function(x) !all(x==0)),]
 deseq_counts <- subset(deseq_counts, select = -c(baseMean,log2FoldChange,lfcSE, stat,pvalue,padj))
 edge_counts <- subset(edge_counts, select = -c(logCPM,PValue,dispersion, logFC,LR,FDR))
 
+# Transpose counts matrix
+
+bulk_counts_t = as.data.frame(t(as.matrix(bulk_counts)))
+bulk_counts_t <- row_to_names(bulk_counts_t, row_number = 1)
+
+
+deseq_counts_t = as.data.frame(t(as.matrix(deseq_counts)))
+deseq_counts_t <- row_to_names(deseq_counts_t, row_number = 1)
+
+
+edge_counts_t = as.data.frame(t(as.matrix(edge_counts)))
+edge_counts_t <- row_to_names(edge_counts_t, row_number = 1)
+
+
+aldex_counts_t = as.data.frame(t(as.matrix(aldex_counts)))
+aldex_counts_t <- row_to_names(aldex_counts_t, row_number = 1)
 
 ```
 
 ## K-means clustering
 
 ```{r, echo=FALSE}
-# Libraries used for clustering
-library(janitor)
-library(cluster)
-library(factoextra)
-
 ### ---------- RAW DATA -----------
-
-# Reshape input for k-means methods
-bulk_counts_t = as.data.frame(t(as.matrix(bulk_counts)))
-
-bulk_counts_t <- row_to_names(bulk_counts_t, row_number = 1)
 
 # Compute k-means
 res_means_raw = kmeans(bulk_counts_t, centers = 2, nstart = 20)
@@ -74,12 +83,6 @@ accuracy_raw = (nrow(correct_clustering_T)+nrow(correct_clustering_N)) / nrow(re
 
 
 ### ---------- DESeq2 normalized data -----------
-
-# Reshape input for k-means methods
-deseq_counts_t = as.data.frame(t(as.matrix(deseq_counts)))
-
-deseq_counts_t <- row_to_names(deseq_counts_t, row_number = 1)
-
 # Compute k-means
 res_means_deseq = kmeans(deseq_counts_t, centers = 2, nstart = 20)
 
@@ -100,12 +103,6 @@ accuracy_deseq = (nrow(correct_clustering_T)+nrow(correct_clustering_N)) / nrow(
 
 
 ### ---------- edgeR DATA -----------
-
-# Reshape input for k-means methods
-edge_counts_t = as.data.frame(t(as.matrix(edge_counts)))
-
-edge_counts_t <- row_to_names(edge_counts_t, row_number = 1)
-
 # Compute k-means
 res_means_edge = kmeans(edge_counts_t, centers = 2, nstart = 20)
 
@@ -126,12 +123,6 @@ accuracy_edge = (nrow(correct_clustering_T)+nrow(correct_clustering_N)) / nrow(r
 
 
 ### ---------- ALDEx2 DATA -----------
-
-# Reshape input for k-means methods
-aldex_counts_t = as.data.frame(t(as.matrix(aldex_counts)))
-
-aldex_counts_t <- row_to_names(aldex_counts_t, row_number = 1)
-
 # Compute k-means
 res_means_aldex = kmeans(aldex_counts_t, centers = 2, nstart = 20)
 
@@ -379,154 +370,143 @@ ggscatter(
 
 ```{r}
 ## KNN algorithm
+
+# RAW DATA
 set.seed(42)
-ran <- sample(1:nrow(bulk_counts), 0.1 * nrow(bulk_counts)) 
+ran <- sample(1:nrow(bulk_counts), 0.5 * nrow(bulk_counts_t)) 
  
 ##extract training set
+bulk_counts <- bulk_counts[,!names(bulk_counts) %in% "Ensembl_gene_id"]
 bulk_counts_train <- bulk_counts[ran,] 
 
 ##extract testing set
 bulk_counts_test <- bulk_counts[-ran,] 
 
 ## extract labels
-target_category <- df_pca$phenotype[ran]
-test_category <- df_pca$phenotype[-ran]
+targets_train<- str_sub(colnames(bulk_counts_t), start=5,end=5)[ran]
+targets_test <-  str_sub(colnames(bulk_counts_t), start=5,end=5)[-ran]
 # Compute KNN function
 library(class)
 
 accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
 
 k_to_try = 1:20
-err_k = rep(x = 0, times = length(k_to_try))
+err_k_raw = rep(x = 0, times = length(k_to_try))
 
 for (i in seq_along(k_to_try)) {
   pred = knn(train = bulk_counts_train, 
              test  = bulk_counts_test, 
-             cl    = target_category, 
+             cl    = targets_train, 
              k     = k_to_try[i])
-  tab = table(pred, test_category)
-  err_k[i] <- accuracy(tab)
+  tab = table(pred, targets_test)
+  err_k_raw[i] <- accuracy(tab)
 }
 
+# DESeq2 DATA
 
-ran <- sample(1:nrow(bulk_counts), 0.25 * nrow(bulk_counts)) 
+set.seed(42)
+ran <- sample(1:nrow(deseqcounts), 0.8 * nrow(deseqcounts_t)) 
  
 ##extract training set
-bulk_counts_train <- bulk_counts[ran,] 
+deseqcounts <- deseqcounts[,!names(deseqcounts) %in% "Ensembl_gene_id"]
+deseqcounts_train <- deseqcounts[ran,] 
 
 ##extract testing set
-bulk_counts_test <- bulk_counts[-ran,] 
+deseqcounts_test <- deseqcounts[-ran,] 
 
 ## extract labels
-target_category <- df_pca$phenotype[ran]
-test_category <- df_pca$phenotype[-ran]
+targets_train<- str_sub(colnames(deseqcounts_t), start=5,end=5)[ran]
+targets_test <-  str_sub(colnames(deseqcounts_t), start=5,end=5)[-ran]
 # Compute KNN function
+library(class)
 
 accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
 
 k_to_try = 1:20
-err_k_25 = rep(x = 0, times = length(k_to_try))
+err_k_deseq = rep(x = 0, times = length(k_to_try))
 
 for (i in seq_along(k_to_try)) {
-  pred = knn(train = bulk_counts_train, 
-             test  = bulk_counts_test, 
-             cl    = target_category, 
+  pred = knn(train = deseqcounts_train, 
+             test  = deseqcounts_test, 
+             cl    = targets_train, 
              k     = k_to_try[i])
-  tab = table(pred, test_category)
-  err_k_25[i] <- accuracy(tab)
+  tab = table(pred, targets_test)
+  err_k_deseq[i] <- accuracy(tab)
 }
 
-ran <- sample(1:nrow(bulk_counts), 0.5 * nrow(bulk_counts)) 
+# EdgeR
+
+set.seed(42)
+ran <- sample(1:nrow(edge_counts), 0.8 * nrow(edge_counts_t)) 
  
 ##extract training set
-bulk_counts_train <- bulk_counts[ran,] 
+edge_counts <- edge_counts[,!names(edge_counts) %in% "Ensembl_gene_id"]
+edge_counts_train <- edge_counts[ran,] 
 
 ##extract testing set
-bulk_counts_test <- bulk_counts[-ran,] 
+edge_counts_test <- edge_counts[-ran,] 
 
 ## extract labels
-target_category <- df_pca$phenotype[ran]
-test_category <- df_pca$phenotype[-ran]
+targets_train<- str_sub(colnames(edge_counts_t), start=5,end=5)[ran]
+targets_test <-  str_sub(colnames(edge_counts_t), start=5,end=5)[-ran]
 # Compute KNN function
+library(class)
 
 accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
 
 k_to_try = 1:20
-err_k_50 = rep(x = 0, times = length(k_to_try))
+err_k_edge = rep(x = 0, times = length(k_to_try))
 
 for (i in seq_along(k_to_try)) {
-  pred = knn(train = bulk_counts_train, 
-             test  = bulk_counts_test, 
-             cl    = target_category, 
+  pred = knn(train = edge_counts_train, 
+             test  = edge__counts_test, 
+             cl    = targets_train, 
              k     = k_to_try[i])
-  tab = table(pred, test_category)
-  err_k_50[i] <- accuracy(tab)
+  tab = table(pred, targets_test)
+  err_k_edge[i] <- accuracy(tab)
 }
 
-ran <- sample(1:nrow(bulk_counts), 0.75 * nrow(bulk_counts)) 
+
+# ALDEx2
+
+set.seed(42)
+ran <- sample(1:nrow(aldex_counts), 0.8 * nrow(aldex_counts_t)) 
  
 ##extract training set
-bulk_counts_train <- bulk_counts[ran,] 
+aldexcounts <- aldex_counts[,!names(aldex_counts) %in% "Ensembl_gene_id"]
+aldex_counts_train <- aldex_counts[ran,] 
 
 ##extract testing set
-bulk_counts_test <- bulk_counts[-ran,] 
+aldex_counts_test <- aldex_counts[-ran,] 
 
 ## extract labels
-target_category <- df_pca$phenotype[ran]
-test_category <- df_pca$phenotype[-ran]
+targets_train<- str_sub(colnames(aldex_counts_t), start=5,end=5)[ran]
+targets_test <-  str_sub(colnames(aldex_counts_t), start=5,end=5)[-ran]
 # Compute KNN function
+library(class)
 
 accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
 
 k_to_try = 1:20
-err_k_75 = rep(x = 0, times = length(k_to_try))
+err_k_aldex = rep(x = 0, times = length(k_to_try))
 
 for (i in seq_along(k_to_try)) {
-  pred = knn(train = bulk_counts_train, 
-             test  = bulk_counts_test, 
-             cl    = target_category, 
+  pred = knn(train = aldex_counts_train, 
+             test  = aldex_counts_test, 
+             cl    = targets_train, 
              k     = k_to_try[i])
-  tab = table(pred, test_category)
-  err_k_75[i] <- accuracy(tab)
+  tab = table(pred, targets_test)
+  err_k_aldex[i] <- accuracy(tab)
 }
-
-
-ran <- sample(1:nrow(bulk_counts), 0.90 * nrow(bulk_counts)) 
-##extract training set
-bulk_counts_train <- bulk_counts[ran,] 
-
-##extract testing set
-bulk_counts_test <- bulk_counts[-ran,] 
-
-## extract labels
-target_category <- df_pca$phenotype[ran]
-test_category <- df_pca$phenotype[-ran]
-# Compute KNN function
-
-accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
-
-k_to_try = 1:20
-err_k_90 = rep(x = 0, times = length(k_to_try))
-
-for (i in seq_along(k_to_try)) {
-  pred = knn(train = bulk_counts_train, 
-             test  = bulk_counts_test, 
-             cl    = target_category, 
-             k     = k_to_try[i])
-  tab = table(pred, test_category)
-  err_k_90[i] <- accuracy(tab)
-}
-
-# plot error vs choice of k
-plot(err_k, type = "b", col = "darkolivegreen4",
+plot(err_k_raw, type = "b", col = "darkolivegreen4",
      lty = 1, xlab = "k, number of neighbors", ylab = "Accuracy",
      main = "Accuracy with k-neighbors",ylim=c(85,103))
+
 # add line for min error seen
 #abline(h = min(err_k), col = "darkorange", lty = 3)
-lines(k_to_try, err_k_25, type = "b", lty = 1, col='deepskyblue')
-lines(k_to_try, err_k_50, type = "b", lty = 1, col='firebrick1')
-lines(k_to_try, err_k_75, type = "b", lty = 1, col='deeppink1')
-lines(k_to_try, err_k_90, type = "b", lty = 1, col='orange2')
+lines(k_to_try, err_k_deseq, type = "b", lty = 1, col='firebrick1')
+lines(k_to_try, err_k_edge, type = "b", lty = 1, col='deeppink1')
+lines(k_to_try, err_k_aldex, type = "b", lty = 1, col='orange2')
 
 legend("bottomleft", 
   legend = c('10/90','25/75','50/50', '75/25','90/10'),
