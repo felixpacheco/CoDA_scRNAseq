@@ -1,9 +1,9 @@
 # -------------------- Load the libraries------------------------------------
 library("tidyverse")
-
+library("xtable")
 # -------------------- Read the data ----------------------------------------
 raw_bulk_counts <- read.csv("data/bulk/counts_bulk_patient.tsv", sep = "\t")
-xtable(raw_bulk_counts[c(1:5), c(1:4, 39)])
+reads <- read.csv("data/bulk/counts_bulk.tsv", sep = "\t")
 metadata_raw <- read.csv("data/bulk/metadata_bulk.tsv", sep = "\t")
 # ---------------- Wrangle bulk counts --------------------------------------
 bulk_counts <- raw_bulk_counts
@@ -34,7 +34,6 @@ metadata_counts <- metadata %>%
   group_by(sample) %>%
   distinct()
 
-xtable(metadata_counts[c(1:5),])
 # Wrangle a bit more
 row.names(bulk_counts_clean) <- bulk_counts_clean$Ensembl_gene_id
 bulk_counts_clean <- bulk_counts_clean[, -1]
@@ -44,5 +43,40 @@ bulk_counts_clean <- bulk_counts_clean[, -1]
 # the BioCManager packages need to be loaded always after the data wrangling because they interfere
 library("ALDEx2")
 conds <- metadata_counts$sample_type
-x.all <- aldex(bulk_counts, conds, mc.samples=128, test="t", effect=TRUE,
-               include.sample.summary=FALSE, denom="all", verbose=FALSE)
+#x.all <- aldex(bulk_counts_clean, conds, mc.samples=128, test="t", effect=TRUE,
+#include.sample.summary=FALSE, denom="all", verbose=FALSE)
+
+
+# Write to file
+write.csv(x.all, "aldex2_DE.csv", row.names = TRUE)
+
+# clr
+x <- aldex.clr(bulk_counts_clean, conds, mc.samples=128, denom="all", verbose=F)
+
+x_df <- data.frame(x@analysisData)
+
+# now reduce the columns to one
+library(stringr)
+nm1 <- str_replace(names(x_df),"\\..*", "")
+x.new <- data.frame
+x_df[paste0(unique(nm1), "_mean")] <- sapply(split.default(x_df, nm1), rowMeans)
+x.new <- x_df[grep("_mean", names(x_df))] 
+write.csv(x.new, "aldex2_clr.csv", row.names = TRUE)
+
+# GLM method
+# one hot encode conditions
+for(unique_value in unique(metadata_counts$sample_type)){
+  metadata_counts[paste("sample", unique_value, sep = ".")] <- ifelse(metadata_counts$sample_type == unique_value, 1, 0)
+  
+}
+o_conds <- metadata_counts[,c(9,10)]
+colnames(o_conds) <- c("T", "N")
+mm <- model.matrix(~ T + N, o_conds )
+
+# Get CLR
+clr <- aldex.clr(bulk_counts_clean, mm, mc.samples=128, denom="all", verbose=F)
+
+# Get aldex.glm
+glm.test <- aldex.glm(clr)
+glm.efftect <- aldex.glm.effect(clr, include.sample.summary=TRUE)
+
