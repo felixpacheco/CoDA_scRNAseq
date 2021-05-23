@@ -81,8 +81,8 @@ x <- aldex.clr(bulk_counts_clean, conds, mc.samples=128, denom="all", verbose=F)
 kw <- aldex.kw(x)
 kw.effect <- aldex.effect(x, include.sample.summary=TRUE, glm.conds=TRUE, CI=TRUE)
 print("kw and kw.effect done")
-write.csv(kw, gzfile("aldex2_clr.csv.gz"), row.names = TRUE)
-write.csv(kw.effect, gzfile("aldex2_clr.csv.gz"), row.names = TRUE)
+write.csv(kw, gzfile("aldex2_kw.csv.gz"), row.names = TRUE)
+write.csv(kw.effect, gzfile("aldex2_kw_clr.csv.gz"), row.names = TRUE)
 print("files saved")
 
 
