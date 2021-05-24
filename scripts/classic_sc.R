@@ -1,7 +1,7 @@
 # -------------------- Load the libraries------------------------------------
 library("tidyverse")
 library("xtable")
-library("data.table")
+
 
 # -------------------- Read the data ----------------------------------------
 sc_counts <- read_csv("data/singlecell/counts_sc.csv.gz")
