@@ -4,17 +4,63 @@ library("xtable")
 library("data.table")
 
 # -------------------- Read the data ----------------------------------------
-sc_counts <- fread("data/singlecell/counts_sc.csv.gz")
-metadata_raw <- fread("data/singlecell/metadata_sc.csv.gz")
+sc_counts <- read_csv("data/singlecell/counts_sc.csv.gz")
+metadata <- read_csv("data/singlecell/metadata_sc.csv.gz")
 
-# The data supposedly is already clean and wrangled
+# Clean and wrangle
+metadata <- metadata[,-1]
+sc_counts <- data.frame(column_to_rownames(sc_counts, var = "Row.names"))
+sc_counts <- sc_counts[,-1] 
 
+# ----------------------------------------------------------------------------
+# ----------------- EdgeR package --------------------------------------------
+# ----------------------------------------------------------------------------
 # Now we need to read the SingleCell experiment
+library("SingleCellExperiment")
+library("edgeR")
+require("scran")
+
+### Make single cell experiment
+sce <- SingleCellExperiment(assays = sc_counts, 
+                            colData = metadata)
+
+# Now proceed with EdgeR
+# Loading data to EdgeR - Create EdgeR object
+dgeFull <- convertTo(sce, type="edgeR", assay.type = 1)
+
+# Preparation for differential expression analysis
+dge <- DGEList(dgeFull$counts[apply(dgeFull$counts, 1, sum) != 0, ],
+               group = dgeFull$metadata$cell_ontology_class
+)
+# Add sample information to DGE object
+dge$metadata <- dgeFull$metadata
+
+# DE analysis
+# Calculate normalization factors + common&tagwise dispersions
+dge <- calcNormFactors(dge)
+dge <- estimateDisp(dge)
+dge
+
+# Fit glm function for log-likelihood ratio test (LTR)
+sample_type_mat <- relevel(factor(metadata$cell_ontology_class), ref = "tumor tissue")
+edesign <- model.matrix(~sample_type_mat)
+fit <- glmFit(dge, edesign)
+lrt <- glmLRT(fit)
+res_edgeR <- as.data.frame(topTags(lrt, n = Inf))
+res_edgeR$dispersion <- lrt$dispersion
+res_edgeR <- merge(res_edgeR, lrt$fitted.values, by = "row.names")
+rownames(res_edgeR) <- res_edgeR$Row.names
+res_edgeR$Row.names <- NULL
+res_edgeR <- res_edgeR[order(res_edgeR$PValue), ]
+head(res_edgeR, 10)
 
 
 
 
-# OLD 
+
+
+
+
 # ----------------------------------------------------------------------------
 # ----------------- DESeq2 package -------------------------------------------
 # ----------------------------------------------------------------------------
