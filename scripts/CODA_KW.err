@@ -25,16 +25,21 @@ The following object is masked from 'package:stats':
     cor
 
 Loading required package: truncnorm
+Loading required package: Rfast
+Loading required package: Rcpp
+Loading required package: RcppZiggurat
+
+Attaching package: 'Rfast'
+
+The following object is masked from 'package:dplyr':
+
+    nth
+
+The following objects are masked from 'package:purrr':
+
+    is_integer, transpose
+
 operating in serial mode
 computing center with all features
 operating in serial mode
-operating in serial mode
-sanity check complete
-rab.all  complete
-rab.win  complete
-rab of samples complete
-within sample difference calculated
-between group difference calculated
-group summaries calculated
-effect size calculated
-summarizing output
+=>> PBS: job killed: walltime 36011 exceeded limit 36000
