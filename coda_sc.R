@@ -14,6 +14,9 @@ sc_counts <- sc_counts[,-1]
 # take the rows with all 0s 
 sc_counts <- sc_counts[apply(sc_counts[, -1], 1, function(x) !all(x == 0)), ]
 
+# row names as list
+genes <- row.names(sc_counts)
+
 # ----------------- SingleCellExperiment -------------------------------------
 # Now we need to read the SingleCell experiment
 library("SingleCellExperiment")
@@ -25,15 +28,27 @@ sce <- SingleCellExperiment(assays = list(counts = sc_counts),
 
 # Pre doublet detection
 #--- gene-annotation ---#
-library(scater)
-rownames(sce) <- uniquifyFeatureNames(
-  rowData(sce)$Ensembl, rowData(sce)$Symbol)
+#library(scater)
+#rownames(sce) <- uniquifyFeatureNames(
+ # rowData(sce)$gene, rowData(sce)$Symbol)
 
 library(AnnotationHub)
 ens.mm.v93 <- AnnotationHub()[["AH64461"]]
-library(data.table)
-df$HeaderName <- row.names()
-rowData(sce)$SEQNAME <- mapIds(ens.mm.v93, keys=rowData(sce)$Ensembl,
+
+# get ensmbl gene ids
+library(biomaRt)
+
+ensembl <- useMart("ensembl", dataset="mmusculus_gene_ensembl")
+mouse_gene_ids  <- "0610009B22Rik"
+
+foo <- getBM(attributes=c('ensembl_gene_id',
+                          'external_gene_name'),
+             filters = 'mgi_symbol',
+             values = mouse_gene_ids,
+             mart = ensembl)
+
+rowData(sce)$gene <- genes
+rowData(sce)$SEQNAME <- mapIds(ens.mm.v93, keys=rowData(sce)$gene,
                                    keytype="GENEID", column="SEQNAME")
 
 #--- quality-control ---#
