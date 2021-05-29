@@ -108,14 +108,14 @@ dbl.out
 # ----------------------------------------------------------------------------
 # the BioCManager packages need to be loaded always after the data wrangling because they interfere
 library("ALDEx2")
-conds <- metadata_counts$sample_type
-x.all <- aldex(bulk_counts_clean, conds, mc.samples=128, test="t", effect=TRUE,include.sample.summary=FALSE, denom="all", verbose=FALSE)
+conds <- metadata$cell_ontology_class
+x.all <- aldex(annotated_genes_counts, conds, mc.samples=128, test="t", effect=TRUE,include.sample.summary=FALSE, denom="all", verbose=FALSE)
 
 # Write to file
 write.csv(x.all, "aldex2_DE.csv", row.names = TRUE)
 
 # clr
-x <- aldex.clr(bulk_counts_clean, conds, mc.samples=128, denom="all", verbose=F)
+x <- aldex.clr(annotated_genes_counts, conds, mc.samples=128, denom="all", verbose=F)
 
 x_df <- data.frame(x@analysisData)
 

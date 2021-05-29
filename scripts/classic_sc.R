@@ -1,3 +1,4 @@
+rm(list=ls())
 # -------------------- Load the libraries------------------------------------
 library("tidyverse")
 library("xtable")
@@ -8,21 +9,85 @@ metadata <- read_csv("data/singlecell/metadata_sc.csv.gz")
 
 # Clean and wrangle
 metadata <- metadata[,-1]
-sc_counts <- data.frame(column_to_rownames(sc_counts, var = "Row.names"))
+names(sc_counts)[names(sc_counts) == 'Row.names'] <- 'external_gene_name'
+
 sc_counts <- sc_counts[,-1] 
 # take the rows with all 0s 
 sc_counts <- sc_counts[apply(sc_counts[, -1], 1, function(x) !all(x == 0)), ]
 
-# ----------------------------------------------------------------------------
-# ----------------- Single Cell Experiment package ---------------------------
-# ----------------------------------------------------------------------------
+# get ensmbl gene ids
+library(biomaRt)
+library("XML")
+
+ensembl <- useMart("ensembl", dataset="mmusculus_gene_ensembl")
+genes_names <- sc_counts$external_gene_name
+
+IDs <- getBM(attributes=c('ensembl_gene_id',
+                          'external_gene_name'),
+             filters = 'mgi_symbol',
+             values = genes_names,
+             mart = ensembl)
+
+# get annotated genes
+annotated_genes_counts <- merge(IDs,sc_counts,by="external_gene_name")
+annotated_genes_counts <- data.frame(column_to_rownames(annotated_genes_counts, var = "ensembl_gene_id"))
+annotated_genes_counts <- annotated_genes_counts[,-1] 
+genes <- row.names(annotated_genes_counts)
+
+# ----------------- SingleCellExperiment -------------------------------------
 # Now we need to read the SingleCell experiment
 library("SingleCellExperiment")
 require("scran")
-
+library(AnnotationHub)
+library(org.Hs.eg.db)
+library(AnnotationDbi)
+library(scater)
+library(BiocSingular)
+library("scDblFinder")
 ### Make single cell experiment
-sce <- SingleCellExperiment(assays = sc_counts, 
+sce <- SingleCellExperiment(assays = list(counts = annotated_genes_counts), 
                             colData = metadata)
+
+# Pre doublet detection
+#--- gene-annotation ---#
+#rownames(sce) <- uniquifyFeatureNames(
+# rowData(sce)$gene, rowData(sce)$Symbol)
+
+ens.mm.v93 <- AnnotationHub()[["AH64461"]]
+
+rowData(sce)$ensembl <- genes
+rowData(sce)$SEQNAME <- mapIds(ens.mm.v93, keys=rowData(sce)$ensembl,
+                               keytype="GENEID", column="SEQNAME")
+
+#--- quality-control ---#
+is.mito <- rowData(sce)$SEQNAME == "MT"
+stats <- perCellQCMetrics(sce, subsets=list(Mito=which(is.mito)))
+qc <- quickPerCellQC(stats, percent_subsets="subsets_Mito_percent")
+sce <- sce[,!qc$discard]
+
+#--- normalization ---#
+set.seed(101000110)
+clusters <- quickCluster(sce)
+sce <- computeSumFactors(sce, clusters=clusters)
+sce <- logNormCounts(sce)
+
+#--- variance-modelling ---#
+set.seed(00010101)
+dec <- modelGeneVarByPoisson(sce)
+top <- getTopHVGs(dec, prop=0.1)
+
+#--- dimensionality-reduction ---#
+set.seed(101010011)
+sce <- denoisePCA(sce, technical=dec, subset.row=top)
+sce <- runTSNE(sce, dimred="PCA")
+
+#--- clustering ---#
+snn.gr <- buildSNNGraph(sce, use.dimred="PCA", k=25)
+colLabels(sce) <- factor(igraph::cluster_walktrap(snn.gr)$membership)
+
+# Doublet detection
+dbl.out <- findDoubletClusters(sce)
+dbl.out
 
 # ----------------------------------------------------------------------------
 # ----------------- EdgeR package --------------------------------------------
@@ -47,6 +112,7 @@ dge
 
 # Fit glm function for log-likelihood ratio test (LTR)
 sample_type_mat <- relevel(factor(metadata$cell_ontology_class), ref = "fibroblast")
+
 edesign <- model.matrix(~sample_type_mat)
 fit <- glmFit(dge, edesign)
 lrt <- glmLRT(fit)
@@ -67,7 +133,6 @@ library("DESeq2")
 # Loading data to DESeq2 - Create DESeq2 object
 dds_mat <- convertTo(sce, type="DESeq2", assay.type = 1)
 
-# Create DESeq object
 dds <- DESeq(dds_mat)
 res <- results(dds)
 
@@ -84,10 +149,3 @@ head(dge_dds, 10)
 write.csv(dge_dds,  gzfile("SC_deseq2_DE.csv.gz"), row.names = TRUE)
 # Write to file
 write.csv(res_edgeR, gzfile("SC_edgeR_DE.csv.gz"), row.names = TRUE)
-
-
-
-
-library("tidyverse")
-df_edge <- read_csv("SC_edgeR_DE.csv.gz")
-df_deseq <- read_csv("SC_deseq2_DE.csv.gz")
