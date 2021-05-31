@@ -1,0 +1,202 @@
+---
+title: "ML_bulk"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Libraries and data
+```{r}
+rm(list=ls())
+set.seed(123)
+# Load the libraries
+library("tidyverse")
+library("xtable")
+library(janitor)
+library(cluster)
+library(factoextra)
+library(data.table)
+library(stringr)
+
+# Read the data 
+raw_counts <- read.csv("/home/people/felpas/CoDA_scRNAseq/data/singlecell/counts_sc.csv.gz", sep = ",")
+metadata <- fread("/home/people/felpas/CoDA_scRNAseq/data/singlecell/metadata_sc.csv.gz", header=TRUE)
+```
+
+## Wrangle counts on different inputs
+
+```{r, echo=FALSE}
+### METADATA
+# Get labels for plotting
+metadata$rows <- rownames(metadata)
+metadata$celltype <-  gsub("([A-Za-z]+).*", "\\1", metadata$cell_ontology_class)
+metadata$label <- paste(metadata$celltype, metadata$rows, sep="_")
+
+### RAW COUNTS
+# Drop X column 
+raw_counts = subset(raw_counts, select = -c(X))
+raw_counts<- raw_counts[apply(raw_counts[,-1], 1, function(x) !all(x==0)),]
+
+
+# Replace colnames for metadata$labels
+labels_list <- c("gene_name")
+columnnames <- colnames(raw_counts)
+for (i in columnnames) {
+  new_element <- metadata[ metadata$cell == i, ]$label
+  labels_list <- c(labels_list, new_element)
+}
+
+colnames(raw_counts) <- labels_list
+# Transpose counts matrix
+
+raw_counts_t = as.data.frame(t(as.matrix(raw_counts)))
+raw_counts_t <- clean_names(row_to_names(raw_counts_t, row_number = 1))
+```
+
+## K-means clustering
+
+```{r, echo=FALSE}
+### ---------- RAW DATA -----------
+
+# Compute k-means
+res_means_raw = kmeans(raw_counts_t, centers = 2, nstart = 20)
+
+# Process output
+res_viz_raw <- as.data.frame(res_means_raw$cluster)
+names(res_viz_raw)[1] <- "cluster"
+res_viz_raw <- cbind(sample_name = rownames(res_viz_raw), res_viz_raw)
+rownames(res_viz_raw) <- 1:nrow(res_viz_raw)
+
+
+res_viz_raw$phenotype <- str_sub(res_viz_raw$sample_name, 1)
+res_viz_raw$phenotype <- str_sub(res_viz_raw$phenotype, start=1,end=1)
+
+correct_clustering_T =  res_viz_raw[res_viz_raw$cluster==1 & res_viz_raw$phenotype =="f", ]
+correct_clustering_N =  res_viz_raw[res_viz_raw$cluster==2 & res_viz_raw$phenotype =="m", ]
+accuracy_raw = (nrow(correct_clustering_T)+nrow(correct_clustering_N)) / nrow(res_viz_raw)
+
+r1T <- nrow(res_viz_raw[res_viz_raw$cluster==1 & res_viz_raw$phenotype=="f",])/nrow(res_viz_raw[res_viz_raw$cluster==1,]) 
+r1N <- nrow(res_viz_raw[res_viz_raw$cluster==1 & res_viz_raw$phenotype=="m",])/nrow(res_viz_raw[res_viz_raw$cluster==1,]) 
+r2N <- nrow(res_viz_raw[res_viz_raw$cluster==2 & res_viz_raw$phenotype=="f",])/nrow(res_viz_raw[res_viz_raw$cluster==2,]) 
+r2T <- nrow(res_viz_raw[res_viz_raw$cluster==2 & res_viz_raw$phenotype=="m",])/nrow(res_viz_raw[res_viz_raw$cluster==2,]) 
+
+
+if (r1T>r1N) {
+cat("Raw data -- Cluster purity:\n\tCluster 1:")
+cat(r1T)
+cat("\n\tCluster 2:")
+cat(r2N)
+cat("\n")
+} else {
+cat("Cluster purity:\n\tCluster 1:")
+cat(r1N)
+cat("\n\tCluster 2:")
+cat(r2T)
+cat("\n")
+}
+
+```
+
+## Visualize results for K-means clustering 
+```{r, echo=FALSE}
+# PCA 
+#rownames(bulk_counts) <- bulk_counts[,1]
+#bulk_counts$Ensembl_gene_id <- NULL
+bulk_countss <- as.data.frame(lapply(raw_counts_t, as.numeric))
+res.pca <- prcomp(bulk_countss, scale = FALSE)
+
+df_pca <- as.data.frame(res.pca[["x"]])
+labels <- row.names(raw_counts_t)
+df_pca$labels <- labels
+df_pca$phenotype <- str_sub(df_pca$labels, start = 1, end = 1)
+
+# Dimension reduction using PCA
+res.pca <- prcomp(bulk_countss, scale = FALSE)
+# Coordinates of individuals
+ind.coord <- as.data.frame(get_pca_ind(res.pca)$coord)
+# Add clusters obtained using the K-means algorithm
+ind.coord$cluster <- factor(res_means_raw$cluster)
+# Add Species groups from the original data sett
+ind.coord$label <- df_pca$phenotype
+
+# Percentage of variance explained by dimensions
+eigenvalue <- round(get_eigenvalue(res.pca), 1)
+variance.percent <- eigenvalue$variance.percent
+
+library(ggpubr)
+
+ggscatter(
+  ind.coord, x = "Dim.1", y = "Dim.2", title="Single cell raw data clustering (k=2)",
+  color = "cluster", palette = "npg", ellipse = TRUE, ellipse.type = "convex",
+  shape = "label", size = 1.5,  legend = "right", ggtheme = theme_bw(),
+  xlab = paste0("Dim 1 (", variance.percent[1], "% )" ),
+  ylab = paste0("Dim 2 (", variance.percent[2], "% )" )
+) +
+  stat_mean(aes(color = cluster), size = 4)
+```
+
+## KNN algorithm
+
+```{r}
+## KNN algorithm
+
+# RAW DATA
+set.seed(1996)
+ran <- sample(1:nrow(bulk_counts_t), 0.9 * nrow(bulk_counts_t)) 
+ 
+##extract training set
+#bulk_counts <- bulk_counts_t[,!names(bulk_counts_t) %in% "Ensembl_gene_id"]
+bulk_counts_train <- bulk_counts_t[ran,] 
+
+##extract testing set
+bulk_counts_test <- bulk_counts_t[-ran,] 
+
+## extract labels
+targets_train<- str_sub(rownames(bulk_counts_t), start=5,end=5)[ran]
+targets_test <-  str_sub(rownames(bulk_counts_t), start=5,end=5)[-ran]
+# Compute KNN function
+library(class)
+
+accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
+
+k_to_try = 1:35
+err_k_raw = rep(x = 0, times = length(k_to_try))
+
+for (i in seq_along(k_to_try)) {
+  pred = knn(train = bulk_counts_train, 
+             test  = bulk_counts_test, 
+             cl    = targets_train, 
+             k     = k_to_try[i])
+  tab = table(pred, targets_test)
+  err_k_raw[i] <- accuracy(tab)
+}
+
+
+plot(err_k_raw, type = "b", col = "darkolivegreen4",
+     lty = 1, xlab = "k, number of neighbors", ylab = "Accuracy",
+     main = "Accuracy with k-neighbors",ylim=c(60,103))
+lines(k_to_try, err_k_deseq, type = "b", lty = 1, col='firebrick1')
+lines(k_to_try, err_k_edge, type = "b", lty = 1, col='deeppink1')
+lines(k_to_try, err_k_aldex, type = "b", lty = 1, col='orange2')
+lines(k_to_try, err_k_clr, type = "b", lty = 1, col='black')
+legend("bottomright", 
+  legend = c('Raw','DESeq2', 'EdgeR','Aldex2', 'CLR'),
+  col = c('darkolivegreen4','firebrick1', 'deeppink1', 'orange2', 'black'),
+  pch = c(20,20,20,20,20), 
+  text.col = "black",
+  cex = 0.50)
+
+
+plot(err_k_raw, type = "b", col = "darkolivegreen4",
+     lty = 1, xlab = "k, number of neighbors", ylab = "Accuracy",
+     main = "Accuracy with k-neighbors with raw data",ylim=c(60,103))
+
+```
+
+
+```{r}
+
+```
