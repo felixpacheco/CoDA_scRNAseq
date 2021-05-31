@@ -24,6 +24,10 @@ library(stringr)
 # Read the data 
 raw_counts <- read.csv("/home/people/felpas/CoDA_scRNAseq/data/singlecell/counts_sc.csv.gz", sep = ",")
 metadata <- fread("/home/people/felpas/CoDA_scRNAseq/data/singlecell/metadata_sc.csv.gz", header=TRUE)
+
+clr_counts <- read.csv("/home/people/felpas/clr_sc.csv.gz", sep = ",")
+deseq_counts <- read.csv("/home/people/felpas/SC_deseq2_DE.csv.gz", sep = ",", header=TRUE)
+edge_counts <- read.csv("/home/people/felpas/SC_edgeR_DE.csv.gz", sep = ",", header=TRUE)
 ```
 
 ## Wrangle counts on different inputs
@@ -36,24 +40,72 @@ metadata$celltype <-  gsub("([A-Za-z]+).*", "\\1", metadata$cell_ontology_class)
 metadata$label <- paste(metadata$celltype, metadata$rows, sep="_")
 
 ### RAW COUNTS
-# Drop X column 
-raw_counts = subset(raw_counts, select = -c(X))
+# Drop X column and remove genes with 0 counts everywhere
+#raw_counts = subset(raw_counts, select = -c(X))
 raw_counts<- raw_counts[apply(raw_counts[,-1], 1, function(x) !all(x==0)),]
-
 
 # Replace colnames for metadata$labels
 labels_list <- c("gene_name")
-columnnames <- colnames(raw_counts)
-for (i in columnnames) {
+columnnames_raw <- colnames(raw_counts)
+for (i in columnnames_raw) {
   new_element <- metadata[ metadata$cell == i, ]$label
   labels_list <- c(labels_list, new_element)
 }
-
 colnames(raw_counts) <- labels_list
+
+### DESEQ AND EDGE : Delete non relevant columns
+deseq_counts <- subset(deseq_counts, select = -c(baseMean,log2FoldChange,lfcSE, stat,pvalue,padj))
+edge_counts <- subset(edge_counts, select = -c(logCPM,PValue,dispersion, logFC,LR,FDR))
+
+# Replace colnames for metadata$labels for deseq2
+labels_list_deseq <- c("gene_name")
+columnnames_deseq <- colnames(deseq_counts)
+for (i in columnnames_deseq) {
+  new_element <- metadata[ metadata$cell == i, ]$label
+  print(new_element)
+  labels_list_deseq <- c(labels_list_deseq, new_element)
+}
+colnames(deseq_counts) <- labels_list_deseq
+
+# Replace colnames for metadata$labels for edge R
+labels_list_edge <- c("gene_name")
+columnnames_edge <- colnames(edge_counts)
+for (i in columnnames_edge) {
+  new_element <- metadata[ metadata$cell == i, ]$label
+  labels_list_edge <- c(labels_list_edge, new_element)
+}
+colnames(edge_counts) <- labels_list_edge
+
+
+# Replace colnames for metadata$labels for CLR values
+clr_counts <- subset(clr_counts, select=-c(Unnamed..0))
+labels_list_clr <- c("gene_name")
+columnnames_clr <- colnames(clr_counts)
+for (i in columnnames_clr) {
+  new_element <- metadata[ metadata$cell == i, ]$label
+  labels_list_clr <- c(labels_list_clr, new_element)
+}
+colnames(clr_counts) <- labels_list_clr
+
 # Transpose counts matrix
 
 raw_counts_t = as.data.frame(t(as.matrix(raw_counts)))
 raw_counts_t <- clean_names(row_to_names(raw_counts_t, row_number = 1))
+
+# Transpose counts matrix
+
+deseq_counts_t = as.data.frame(t(as.matrix(deseq_counts)))
+deseq_counts_t <- clean_names(row_to_names(deseq_counts_t, row_number = 1))
+
+# Transpose counts matrix
+
+edge_counts_t = as.data.frame(t(as.matrix(edge_counts)))
+edge_counts_t <- clean_names(row_to_names(edge_counts_t, row_number = 1))
+
+# Transpose counts matrix
+
+clr_counts_t = as.data.frame(t(as.matrix(clr_counts)))
+clr_counts_t <- clean_names(row_to_names(clr_counts_t, row_number = 1))
 ```
 
 ## K-means clustering
@@ -74,16 +126,13 @@ rownames(res_viz_raw) <- 1:nrow(res_viz_raw)
 res_viz_raw$phenotype <- str_sub(res_viz_raw$sample_name, 1)
 res_viz_raw$phenotype <- str_sub(res_viz_raw$phenotype, start=1,end=1)
 
-correct_clustering_T =  res_viz_raw[res_viz_raw$cluster==1 & res_viz_raw$phenotype =="f", ]
-correct_clustering_N =  res_viz_raw[res_viz_raw$cluster==2 & res_viz_raw$phenotype =="m", ]
-accuracy_raw = (nrow(correct_clustering_T)+nrow(correct_clustering_N)) / nrow(res_viz_raw)
-
+# Compute cluster purity for each cluster
 r1T <- nrow(res_viz_raw[res_viz_raw$cluster==1 & res_viz_raw$phenotype=="f",])/nrow(res_viz_raw[res_viz_raw$cluster==1,]) 
 r1N <- nrow(res_viz_raw[res_viz_raw$cluster==1 & res_viz_raw$phenotype=="m",])/nrow(res_viz_raw[res_viz_raw$cluster==1,]) 
 r2N <- nrow(res_viz_raw[res_viz_raw$cluster==2 & res_viz_raw$phenotype=="f",])/nrow(res_viz_raw[res_viz_raw$cluster==2,]) 
 r2T <- nrow(res_viz_raw[res_viz_raw$cluster==2 & res_viz_raw$phenotype=="m",])/nrow(res_viz_raw[res_viz_raw$cluster==2,]) 
 
-
+# Print cluster purity for each cluster
 if (r1T>r1N) {
 cat("Raw data -- Cluster purity:\n\tCluster 1:")
 cat(r1T)
@@ -98,6 +147,129 @@ cat(r2T)
 cat("\n")
 }
 
+### ---------- DESeq2 normalized data -----------
+# Compute k-means
+res_means_deseq = kmeans(deseq_counts_t, centers = 2, nstart = 20)
+
+# Process output
+res_viz_deseq <- as.data.frame(res_means_deseq$cluster)
+names(res_viz_deseq)[1] <- "cluster"
+res_viz_deseq <- cbind(sample_name = rownames(res_viz_deseq), res_viz_deseq)
+rownames(res_viz_deseq) <- 1:nrow(res_viz_deseq)
+
+res_viz_deseq$phenotype <- str_sub(res_viz_deseq$sample_name, 1)
+res_viz_deseq$phenotype <- str_sub(res_viz_deseq$phenotype, start=1,end=1)
+
+d1T <- nrow(res_viz_deseq[res_viz_deseq$cluster==1 & res_viz_deseq$phenotype=="f",])/nrow(res_viz_deseq[res_viz_deseq$cluster==1,]) 
+d1N <- nrow(res_viz_deseq[res_viz_deseq$cluster==1 & res_viz_deseq$phenotype=="m",])/nrow(res_viz_deseq[res_viz_deseq$cluster==1,]) 
+d2N <- nrow(res_viz_deseq[res_viz_deseq$cluster==2 & res_viz_deseq$phenotype=="m",])/nrow(res_viz_deseq[res_viz_deseq$cluster==2,]) 
+d2T <- nrow(res_viz_deseq[res_viz_deseq$cluster==2 & res_viz_deseq$phenotype=="f",])/nrow(res_viz_deseq[res_viz_deseq$cluster==2,]) 
+
+if (d1T>d1N) {
+cat("DESeq2 data -- Cluster purity:\n\tCluster 1:")
+cat(d1T)
+cat("\n\tCluster 2:")
+cat(d2N)
+cat("\n")
+} else {
+cat("DESeq2 data -- Cluster purity:\n\tCluster 1:")
+cat(d1N)
+cat("\n\tCluster 2:")
+cat(d2T)
+cat("\n")
+}
+
+### ---------- edgeR DATA -----------
+# Compute k-means
+res_means_edge = kmeans(edge_counts_t, centers = 2, nstart = 20)
+
+# Process output
+res_viz_edge <- as.data.frame(res_means_edge$cluster)
+names(res_viz_edge)[1] <- "cluster"
+res_viz_edge <- cbind(sample_name = rownames(res_viz_edge), res_viz_edge)
+rownames(res_viz_edge) <- 1:nrow(res_viz_edge)
+
+res_viz_edge$phenotype <- str_sub(res_viz_edge$sample_name, 1)
+res_viz_edge$phenotype <- str_sub(res_viz_edge$phenotype, start=1,end=1)
+
+e1T <- nrow(res_viz_edge[res_viz_edge$cluster==1 & res_viz_edge$phenotype=="f",])/nrow(res_viz_edge[res_viz_edge$cluster==1,])
+e1N <- nrow(res_viz_edge[res_viz_edge$cluster==1 & res_viz_edge$phenotype=="m",])/nrow(res_viz_edge[res_viz_edge$cluster==1,]) 
+e2N <- nrow(res_viz_edge[res_viz_edge$cluster==2 & res_viz_edge$phenotype=="m",])/nrow(res_viz_edge[res_viz_edge$cluster==2,]) 
+e2T <- nrow(res_viz_edge[res_viz_edge$cluster==2 & res_viz_edge$phenotype=="f",])/nrow(res_viz_edge[res_viz_edge$cluster==2,]) 
+
+if (e1T>e1N) {
+cat("EdgeR data -- Cluster purity:\n\tCluster 1:")
+cat(e1T)
+cat("\n\tCluster 2:")
+cat(e2N)
+cat("\n")
+} else {
+cat("EdgeR data -- Cluster purity:\n\tCluster 1:")
+cat(e1N)
+cat("\n\tCluster 2:")
+cat(e2T)
+cat("\n")
+}
+
+### ---------- ALDEx2 DATA -----------
+# Compute k-means
+#res_means_aldex = kmeans(aldex_counts_t, centers = 2, nstart = 20)
+
+# Process output
+#res_viz_aldex <- as.data.frame(res_means_aldex$cluster)
+#names(res_viz_aldex)[1] <- "cluster"
+#res_viz_aldex <- cbind(sample_name = rownames(res_viz_aldex), res_viz_aldex)
+#rownames(res_viz_aldex) <- 1:nrow(res_viz_aldex)
+
+#res_viz_aldex$phenotype <- str_sub(res_viz_aldex$sample_name, 5)
+#res_viz_aldex$phenotype <- str_sub(res_viz_aldex$phenotype, start=1,end=1)
+
+#a1T <- nrow(res_viz_aldex[res_viz_aldex$cluster==1 & res_viz_aldex$phenotype=="f",])/nrow(res_viz_aldex[res_viz_aldex$cluster==1,]) 
+#a1N <- nrow(res_viz_aldex[res_viz_aldex$cluster==1 & res_viz_aldex$phenotype=="m",])/nrow(res_viz_aldex[res_viz_aldex$cluster==1,]) 
+#a2N <- nrow(res_viz_aldex[res_viz_aldex$cluster==2 & res_viz_aldex$phenotype=="m",])/nrow(res_viz_aldex[res_viz_aldex$cluster==2,]) 
+#a2T <- nrow(res_viz_aldex[res_viz_aldex$cluster==2 & res_viz_aldex$phenotype=="f",])/nrow(res_viz_aldex[res_viz_aldex$cluster==2,]) 
+
+#if (a1T>a1N) {
+#cat("ALDEx2 data -- Cluster purity:\n\tCluster 1:")
+#cat(a1T)
+#cat("\n\tCluster 2:")
+#cat(a2N)
+#} else {
+#cat("ALDEx2 data -- Cluster purity:\n\tCluster 1:")
+#cat(a1N)
+#cat("\n\tCluster 2:")
+#cat(a2T)
+#}
+
+### ---------- CLR DATA -----------
+# Compute k-means
+res_means_clr = kmeans(clr_counts_t, centers = 2, nstart = 20)
+
+# Process output
+res_viz_clr <- as.data.frame(res_means_clr$cluster)
+names(res_viz_clr)[1] <- "cluster"
+res_viz_clr <- cbind(sample_name = rownames(res_viz_clr), res_viz_clr)
+rownames(res_viz_clr) <- 1:nrow(res_viz_clr)
+
+res_viz_clr$phenotype <- str_sub(res_viz_clr$sample_name, 1)
+res_viz_clr$phenotype <- str_sub(res_viz_clr$phenotype, start=1,end=1)
+
+c1T <- nrow(res_viz_clr[res_viz_clr$cluster==1 & res_viz_clr$phenotype=="f",])/nrow(res_viz_clr[res_viz_clr$cluster==1,]) 
+c1N <- nrow(res_viz_clr[res_viz_clr$cluster==1 & res_viz_clr$phenotype=="m",])/nrow(res_viz_clr[res_viz_clr$cluster==1,]) 
+c2N <- nrow(res_viz_clr[res_viz_clr$cluster==2 & res_viz_clr$phenotype=="m",])/nrow(res_viz_clr[res_viz_clr$cluster==2,]) 
+c2T <- nrow(res_viz_clr[res_viz_clr$cluster==2 & res_viz_clr$phenotype=="f",])/nrow(res_viz_clr[res_viz_clr$cluster==2,]) 
+
+if (c1T>c1N) {
+cat("CLR data -- Cluster purity:\n\tCluster 1:")
+cat(c1T)
+cat("\n\tCluster 2:")
+cat(c2N)
+} else {
+cat("CLR data -- Cluster purity:\n\tCluster 1:")
+cat(c1N)
+cat("\n\tCluster 2:")
+cat(c2T)
+}
 ```
 
 ## Visualize results for K-means clustering 
@@ -136,6 +308,135 @@ ggscatter(
   ylab = paste0("Dim 2 (", variance.percent[2], "% )" )
 ) +
   stat_mean(aes(color = cluster), size = 4)
+
+ggplot(ind.coord, aes(x=Dim.1, y=Dim.2, shape=label, color=label)) +
+  geom_point() + ggtitle("Principal component analysis projection") +
+  xlab("Principal component 1") + ylab("Principal Compoment 2")
+
+
+##---------- DESeq2 -----------
+
+deseq_countss <- as.data.frame(lapply(deseq_counts_t, as.numeric))
+res.pca_deseq <- prcomp(deseq_countss, scale = FALSE)
+
+df_pca_deseq <- as.data.frame(res.pca_deseq[["x"]])
+labels <- row.names(deseq_counts_t)
+df_pca_deseq$labels <- labels
+df_pca_deseq$phenotype <- str_sub(df_pca_deseq$labels, start = 5, end = 5)
+
+# Dimension reduction using PCA
+res.pca_deseq <- prcomp(deseq_countss, scale = FALSE)
+# Coordinates of individuals
+ind.coord <- as.data.frame(get_pca_ind(res.pca_deseq)$coord)
+# Add clusters obtained using the K-means algorithm
+ind.coord$cluster <- factor(res_means_deseq$cluster)
+# Add Species groups from the original data sett
+ind.coord$label <- df_pca_deseq$phenotype
+# Data inspection
+head(ind.coord)
+
+# Percentage of variance explained by dimensions
+eigenvalue <- round(get_eigenvalue(res.pca_deseq), 1)
+variance.percent <- eigenvalue$variance.percent
+head(eigenvalue)
+
+ggscatter(
+  ind.coord, x = "Dim.1", y = "Dim.2", title = "DESeq2 data clustering (k=2)",
+  color = "cluster", palette = "npg", ellipse = TRUE, ellipse.type = "convex",
+  shape = "label", size = 1.5,  legend = "right", ggtheme = theme_bw(),
+  xlab = paste0("Dim 1 (", variance.percent[1], "% )" ),
+  ylab = paste0("Dim 2 (", variance.percent[2], "% )" )
+) +
+  stat_mean(aes(color = cluster), size = 4)
+
+ggplot(ind.coord, aes(x=Dim.1, y=Dim.2, shape=label, color=label)) +
+  geom_point() + ggtitle("Principal component analysis projection") +
+  xlab("Principal component 1") + ylab("Principal Compoment 2")
+
+##---------- edgeR-----------
+
+edge_countss <- as.data.frame(lapply(edge_counts_t, as.numeric))
+res.pca_edge <- prcomp(edge_countss, scale = FALSE)
+
+df_pca_edge <- as.data.frame(res.pca_edge[["x"]])
+labels <- row.names(edge_counts_t)
+df_pca_edge$labels <- labels
+df_pca_edge$phenotype <- str_sub(df_pca_edge$labels, start = 5, end = 5)
+
+# Dimension reduction using PCA
+res.pca_edge <- prcomp(edge_countss, scale = FALSE)
+# Coordinates of individuals
+ind.coord <- as.data.frame(get_pca_ind(res.pca_edge)$coord)
+# Add clusters obtained using the K-means algorithm
+ind.coord$cluster <- factor(res_means_edge$cluster)
+# Add Species groups from the original data sett
+ind.coord$label <- df_pca_edge$phenotype
+# Data inspection
+head(ind.coord)
+
+# Percentage of variance explained by dimensions
+eigenvalue <- round(get_eigenvalue(res.pca_edge), 1)
+variance.percent <- eigenvalue$variance.percent
+head(eigenvalue)
+
+ggscatter(
+  ind.coord, x = "Dim.1", y = "Dim.2", title = "EdgeR data clustering (k=2)",
+  color = "cluster", palette = "npg", ellipse = TRUE, ellipse.type = "convex",
+  shape = "label", size = 1.5,  legend = "right", ggtheme = theme_bw(),
+  xlab = paste0("Dim 1 (", variance.percent[1], "% )" ),
+  ylab = paste0("Dim 2 (", variance.percent[2], "% )" )
+) +
+  stat_mean(aes(color = cluster), size = 4)
+
+ggplot(ind.coord, aes(x=Dim.1, y=Dim.2, shape=label, color=label)) +
+  geom_point() + ggtitle("Principal component analysis projection") +
+  xlab("Principal component 1") + ylab("Principal Compoment 2")
+##---------- CLR -----------
+
+clr_countss <- as.data.frame(lapply(clr_counts_t, as.numeric))
+res.pca_clr <- prcomp(clr_countss, scale = FALSE)
+
+df_pca_clr <- as.data.frame(res.pca_clr[["x"]])
+labels <- row.names(clr_counts_t)
+df_pca_clr$labels <- labels
+df_pca_clr$phenotype <- str_sub(df_pca_clr$labels, start = 5, end = 5)
+
+# Dimension reduction using PCA
+res.pca_clr <- prcomp(clr_countss, scale = FALSE)
+# Coordinates of individuals
+ind.coord <- as.data.frame(get_pca_ind(res.pca_clr)$coord)
+# Add clusters obtained using the K-means algorithm
+ind.coord$cluster <- factor(res_means_clr$cluster)
+# Add Species groups from the original data sett
+ind.coord$label <- df_pca_clr$phenotype
+# Data inspection
+head(ind.coord)
+
+# Percentage of variance explained by dimensions
+eigenvalue <- round(get_eigenvalue(res.pca_clr), 1)
+variance.percent <- eigenvalue$variance.percent
+head(eigenvalue)
+
+ggscatter(
+  ind.coord, x = "Dim.1", y = "Dim.2", title = "CLR data clustering (k=2)",
+  color = "cluster", palette = "npg", ellipse = TRUE, ellipse.type = "convex",
+  shape = "label", size = 1.5,  legend = "right", ggtheme = theme_bw(),
+  xlab = paste0("Dim 1 (", variance.percent[1], "% )" ),
+  ylab = paste0("Dim 2 (", variance.percent[2], "% )" )
+) +
+  stat_mean(aes(color = cluster), size = 4)
+
+ggscatter(
+  ind.coord, x = "Dim.1", y = "Dim.2", title = "CLR data clustering (k=2)",
+  color = "label", palette = "npg", ellipse = TRUE, ellipse.type = "convex",
+  shape = "cluster", size = 1.5,  legend = "right", ggtheme = theme_bw(),
+  xlab = paste0("Dim 1 (", variance.percent[1], "% )" ),
+  ylab = paste0("Dim 2 (", variance.percent[2], "% )" )
+)
+
+ggplot(ind.coord, aes(x=Dim.1, y=Dim.2, shape=label, color=label)) +
+  geom_point() + ggtitle("Principal component analysis projection") +
+  xlab("Principal component 1") + ylab("Principal Compoment 2")
 ```
 
 ## KNN algorithm
@@ -145,18 +446,18 @@ ggscatter(
 
 # RAW DATA
 set.seed(1996)
-ran <- sample(1:nrow(bulk_counts_t), 0.9 * nrow(bulk_counts_t)) 
+ran <- sample(1:nrow(raw_counts_t), 0.9 * nrow(raw_counts_t)) 
  
 ##extract training set
 #bulk_counts <- bulk_counts_t[,!names(bulk_counts_t) %in% "Ensembl_gene_id"]
-bulk_counts_train <- bulk_counts_t[ran,] 
+raw_counts_train <- raw_counts_t[ran,] 
 
 ##extract testing set
-bulk_counts_test <- bulk_counts_t[-ran,] 
+raw_counts_test <- raw_counts_t[-ran,] 
 
 ## extract labels
-targets_train<- str_sub(rownames(bulk_counts_t), start=5,end=5)[ran]
-targets_test <-  str_sub(rownames(bulk_counts_t), start=5,end=5)[-ran]
+targets_train<- str_sub(rownames(raw_counts_t), start=1,end=1)[ran]
+targets_test <-  str_sub(rownames(raw_counts_t), start=1,end=1)[-ran]
 # Compute KNN function
 library(class)
 
@@ -166,12 +467,135 @@ k_to_try = 1:35
 err_k_raw = rep(x = 0, times = length(k_to_try))
 
 for (i in seq_along(k_to_try)) {
-  pred = knn(train = bulk_counts_train, 
-             test  = bulk_counts_test, 
+  pred = knn(train = raw_counts_train, 
+             test  = raw_counts_test, 
              cl    = targets_train, 
              k     = k_to_try[i])
   tab = table(pred, targets_test)
   err_k_raw[i] <- accuracy(tab)
+}
+
+
+# DESeq2 DATA
+ran <- sample(1:nrow(deseq_counts_t), 0.9 * nrow(deseq_counts_t)) 
+ 
+##extract training set
+#deseq_counts <- deseq_counts[,!names(deseq_counts) %in% "X"]
+deseq_counts_train <- deseq_counts_t[ran,] 
+
+##extract testing set
+deseq_counts_test <- deseq_counts_t[-ran,] 
+
+## extract labels
+targets_train<- str_sub(rownames(deseq_counts_t), start=1,end=1)[ran]
+targets_test <-  str_sub(rownames(deseq_counts_t), start=1,end=1)[-ran]
+# Compute KNN function
+library(class)
+
+accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
+
+k_to_try = 1:35
+err_k_deseq = rep(x = 0, times = length(k_to_try))
+
+for (i in seq_along(k_to_try)) {
+  pred = knn(train = deseq_counts_train, 
+             test  = deseq_counts_test, 
+             cl    = targets_train, 
+             k     = k_to_try[i])
+  tab = table(pred, targets_test)
+  err_k_deseq[i] <- accuracy(tab)
+}
+
+# EdgeR
+ran <- sample(1:nrow(edge_counts_t), 0.9 * nrow(edge_counts_t)) 
+ 
+##extract training set
+edge_counts <- edge_counts_t[,!names(edge_counts_t) %in% "X"]
+edge_counts_train <- edge_counts_t[ran,] 
+
+##extract testing set
+edge_counts_test <- edge_counts_t[-ran,] 
+
+## extract labels
+targets_train<- str_sub(rownames(edge_counts_t), start=1,end=1)[ran]
+targets_test <-  str_sub(rownames(edge_counts_t), start=1,end=1)[-ran]
+# Compute KNN function
+library(class)
+
+accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
+
+k_to_try = 1:35
+err_k_edge = rep(x = 0, times = length(k_to_try))
+
+for (i in seq_along(k_to_try)) {
+  pred = knn(train = edge_counts_train, 
+             test  = edge_counts_test, 
+             cl    = targets_train, 
+             k     = k_to_try[i])
+  tab = table(pred, targets_test)
+  err_k_edge[i] <- accuracy(tab)
+}
+
+
+# ALDEx2
+ran <- sample(1:nrow(aldex_counts_t), 0.9 * nrow(aldex_counts_t)) 
+ 
+##extract training set
+aldex_counts <- aldex_counts_t[,!names(aldex_counts_t) %in% "X"]
+aldex_counts_train <- aldex_counts_t[ran,] 
+
+##extract testing set
+aldex_counts_test <- aldex_counts_t[-ran,] 
+
+## extract labels
+targets_train<- str_sub(rownames(aldex_counts_t), start=1,end=1)[ran]
+targets_test <-  str_sub(rownames(aldex_counts_t), start=1,end=1)[-ran]
+
+# Compute KNN function
+library(class)
+
+accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
+
+k_to_try = 1:35
+err_k_aldex = rep(x = 0, times = length(k_to_try))
+
+for (i in seq_along(k_to_try)) {
+  pred = knn(train = aldex_counts_train, 
+             test  = aldex_counts_test, 
+             cl    = targets_train, 
+             k     = k_to_try[i])
+  tab = table(pred, targets_test)
+  err_k_aldex[i] <- accuracy(tab)
+}
+
+# CLR
+ran <- sample(1:nrow(clr_counts_t), 0.9 * nrow(clr_counts_t)) 
+ 
+##extract training set
+clr_counts <- clr_counts_t[,!names(clr_counts_t) %in% "X"]
+clr_counts_train <- clr_counts_t[ran,] 
+
+##extract testing set
+clr_counts_test <- clr_counts_t[-ran,] 
+
+## extract labels
+targets_train<- str_sub(rownames(clr_counts_t), start=1,end=1)[ran]
+targets_test <-  str_sub(rownames(clr_counts_t), start=1,end=1)[-ran]
+# Compute KNN function
+library(class)
+
+accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
+
+k_to_try = 1:35
+err_k_clr = rep(x = 0, times = length(k_to_try))
+
+for (i in seq_along(k_to_try)) {
+  pred = knn(train = clr_counts_train, 
+             test  = clr_counts_test, 
+             cl    = targets_train, 
+             k     = k_to_try[i])
+  tab = table(pred, targets_test)
+  err_k_clr[i] <- accuracy(tab)
 }
 
 
@@ -182,6 +606,7 @@ lines(k_to_try, err_k_deseq, type = "b", lty = 1, col='firebrick1')
 lines(k_to_try, err_k_edge, type = "b", lty = 1, col='deeppink1')
 lines(k_to_try, err_k_aldex, type = "b", lty = 1, col='orange2')
 lines(k_to_try, err_k_clr, type = "b", lty = 1, col='black')
+
 legend("bottomright", 
   legend = c('Raw','DESeq2', 'EdgeR','Aldex2', 'CLR'),
   col = c('darkolivegreen4','firebrick1', 'deeppink1', 'orange2', 'black'),
@@ -189,11 +614,34 @@ legend("bottomright",
   text.col = "black",
   cex = 0.50)
 
-
+png(file="raw_KNN_sc.png", height = 800, width = 1000, res=1000)
 plot(err_k_raw, type = "b", col = "darkolivegreen4",
      lty = 1, xlab = "k, number of neighbors", ylab = "Accuracy",
      main = "Accuracy with k-neighbors with raw data",ylim=c(60,103))
+dev.off()
 
+png(file="deseq_KNN_sc.png", height = 800, width = 1000, res=1000)
+plot(err_k_deseq, type = "b", col = "darkolivegreen4",
+     lty = 1, xlab = "k, number of neighbors", ylab = "Accuracy",
+     main = "Accuracy with k-neighbors with DESeq2",ylim=c(60,103))
+dev.off()
+
+#png(file="aldex_KNN_sc.png", height = 800, width = 1000, res=1000)
+#plot(err_k_aldex, type = "b", col = "darkolivegreen4",
+#     lty = 1, xlab = "k, number of neighbors", ylab = "Accuracy",
+#     main = "Accuracy with k-neighbors with ALDEx2",ylim=c(60,103))
+
+png(file="edge_KNN_sc.png", height = 800, width = 1000, res=1000)
+plot(err_k_edge, type = "b", col = "darkolivegreen4",
+     lty = 1, xlab = "k, number of neighbors", ylab = "Accuracy",
+     main = "Accuracy with k-neighbors with Edge R",ylim=c(20,103))
+dev.off()
+
+png(file="clr_KNN_sc.png", height = 800, width = 1000, res=1000)
+plot(err_k_clr, type = "b", col = "darkolivegreen4",
+     lty = 1, xlab = "k, number of neighbors", ylab = "Accuracy",
+     main = "Accuracy with k-neighbors with CLR",ylim=c(60,103))
+dev.off()
 ```
 
 
