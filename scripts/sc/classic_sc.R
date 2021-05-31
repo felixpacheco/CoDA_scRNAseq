@@ -5,8 +5,8 @@ library("tidyverse")
 library("xtable")
 
 # -------------------- Read the data ----------------------------------------
-sc_counts <- read_csv("/home/people/laucom/CoDA_scRNAseq/data/singlecell/counts_sc.csv.gz")
-metadata <- read_csv("/home/people/laucom/CoDA_scRNAseq/data/singlecell/metadata_sc.csv.gz")
+sc_counts <- read_csv("/Users/laurasansc/github/CoDA_scRNAseq/data/singlecell/counts_sc.csv.gz")
+metadata <- read_csv("/Users/laurasansc/github/CoDA_scRNAseq/data/singlecell/metadata_sc.csv.gz")
 
 # Clean and wrangle
 metadata <- metadata[,-1]
@@ -27,7 +27,7 @@ genes_names <- sc_counts$external_gene_name
 #             filters = 'mgi_symbol',
 #             values = genes_names,
 #             mart = ensembl)
-IDs <- read_csv("/home/people/laucom/CoDA_scRNAseq/data/martquery_0530110047_39.txt.gz")
+IDs <- read_csv("/Users/laurasansc/github/CoDA_scRNAseq/data/martquery_0530110047_39.txt.gz")
 names(IDs)[names(IDs) == 'Gene stable ID'] <- 'ensembl_gene_id'
 names(IDs)[names(IDs) == 'Gene name'] <- 'external_gene_name'
 
@@ -180,7 +180,7 @@ x_df <- data.frame(x@analysisData)
 
 # now reduce the columns to one
 library(stringr)
-nm1 <- str_replace(names(x_df),"\\..*", "")
+nm1 <- str_replace(names(x_df),"\\..\\..\\..\\..*", "")
 x.new <- data.frame
 x_df[paste0(unique(nm1), "_mean")] <- sapply(split.default(x_df, nm1), rowMeans)
 x.new <- x_df[grep("_mean", names(x_df))] 

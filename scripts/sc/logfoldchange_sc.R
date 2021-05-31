@@ -4,13 +4,13 @@ library("xtable")
 # load the 3 log-fold change
 deseq <- read_csv("/Users/laurasansc/Desktop/BioinformaticsSystemsBiology/CoDA_special_course/SC_deseq2_DE.csv.gz")
 edge <- read_csv("/Users/laurasansc/Desktop/BioinformaticsSystemsBiology/CoDA_special_course/SC_edgeR_DE.csv.gz")
-aldex <- read.csv("results/bulk/aldex2_DE.csv")
+aldex <- read_csv("/Users/laurasansc/Desktop/BioinformaticsSystemsBiology/CoDA_special_course/SC_aldex2_DE.csv.gz")
 
 deseq <- deseq[, c(1, 2, 3, 4, 5, 6, 7)]
 edge <- edge[, c(1, 2, 3, 4, 5, 6, 7)]
 # -------------------- START  VOLCANO PLOTS ---------------------------------
 png(file = "volcanoplots.png", height = 1500, width = 4000, res = 300)
-par(mfrow = c(1, 2))
+par(mfrow = c(1, 3))
 
 # Volcano plot desqe2
 with(deseq, plot(log2FoldChange, -log10(pvalue), pch = 1, main = "Volcano plot: DESeq2", xlab = "Log2FoldChange", ylab = "Log10(pvalue)", cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5))
