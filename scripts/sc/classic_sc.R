@@ -136,15 +136,9 @@ print("sc experiment done")
 # ----------------------------------------------------------------------------
 # library("DESeq2")
 
-<<<<<<< HEAD:scripts/classic_sc.R
 # # Now proceed with DESeq2
 # # Loading data to DESeq2 - Create DESeq2 object
 # dds_mat <- convertTo(sce, type="DESeq2", assay.type = 1)
-=======
-dds_mat <-estimateSizeFactors(dds_mat, type = 'iterate')
-dds <- DESeq(dds_mat)
-res <- results(dds)
->>>>>>> 5e547799c013ee283763474e5dcf6b7e51e9648c:scripts/sc/classic_sc.R
 
 # dds <- DESeq(dds_mat)
 # res <- results(dds)
