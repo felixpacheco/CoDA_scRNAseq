@@ -1,4 +1,5 @@
 rm(list=ls())
+options(warn=-1)
 # -------------------- Load the libraries------------------------------------
 library("tidyverse")
 library("xtable")
@@ -137,6 +138,7 @@ library("DESeq2")
 # Loading data to DESeq2 - Create DESeq2 object
 dds_mat <- convertTo(sce, type="DESeq2", assay.type = 1)
 
+dds_mat <-estimateSizeFactors(dds_mat, type = 'iterate')
 dds <- DESeq(dds_mat)
 res <- results(dds)
 
