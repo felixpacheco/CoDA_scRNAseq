@@ -167,14 +167,14 @@ library("ALDEx2")
 print("loaded ALDEx2")
 conds <- metadata$cell_ontology_class
 print(head(conds))
-x.all <- aldex(annotated_genes_counts, conds, mc.samples=50, test="t", effect=TRUE,include.sample.summary=FALSE, denom="all", verbose=FALSE)
-print("x.all done")
+#x.all <- aldex(annotated_genes_counts, conds, mc.samples=5, test="t", effect=TRUE,include.sample.summary=FALSE, denom="all", verbose=FALSE)
+#print("x.all done")
 
 # Write to file
-write.csv(x.all, "/home/people/laucom/CoDA_scRNAseq/results/SC/aldex2_DE.csv", row.names = TRUE)
-print("files DE aldex done")
+#write.csv(x.all, "/home/people/laucom/CoDA_scRNAseq/results/SC/aldex2_DE.csv", row.names = TRUE)
+#print("files DE aldex done")
 # clr
-x <- aldex.clr(annotated_genes_counts, conds, mc.samples=50, denom="all", verbose=F)
+x <- aldex.clr(annotated_genes_counts, conds, mc.samples=5, denom="all", verbose=F)
 print("files pre-clr done")
 x_df <- data.frame(x@analysisData)
 
@@ -184,6 +184,6 @@ nm1 <- str_replace(names(x_df),"\\..\\..\\..\\..*", "")
 x.new <- data.frame
 x_df[paste0(unique(nm1), "_mean")] <- sapply(split.default(x_df, nm1), rowMeans)
 x.new <- x_df[grep("_mean", names(x_df))] 
-write.csv(x.new, "/home/people/laucom/CoDA_scRNAseq/SC/aldex2_clr.csv", row.names = TRUE)
+write.csv(x.new, "/home/people/laucom/CoDA_scRNAseq/results/SC/aldex2_clr.csv", row.names = TRUE)
 
 print("files CLR aldex done")
