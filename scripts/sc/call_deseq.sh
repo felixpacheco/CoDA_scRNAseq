@@ -3,10 +3,10 @@
 ### Account information
 #PBS -W group_list=cge -A cge
 ### Job name (comment out the next line to get the name of the script used as the job name)
-#PBS -N sc_run_deseq
+#PBS -N sc_run
 ### Output files (comment out the next 2 lines to get the job name used instead)
-#PBS -e sc_run_deseq.err
-#PBS -o sc_run_deseq.log
+#PBS -e sc_run.err
+#PBS -o sc_run.log
 ### Only send mail when job is aborted or terminates abnormally
 #PBS -m n
 ### Number of nodes
@@ -34,4 +34,4 @@ module load R/4.1.0
 # This is where the work is done
 # Make sure that this script is not bigger than 64kb ~ 150 lines, otherwise put in seperat script and execute from here
 pwd
-Rscript /home/people/laucom/CoDA_scRNAseq/scripts/sc/classic_sc_deseq.R 
+Rscript /home/people/laucom/CoDA_scRNAseq/scripts/sc/classic_sc.R 

@@ -134,26 +134,26 @@ print("sc experiment done")
 # ----------------------------------------------------------------------------
 # ----------------- DESeq2 package -------------------------------------------
 # ----------------------------------------------------------------------------
-# library("DESeq2")
+library("DESeq2")
 
-# # Now proceed with DESeq2
-# # Loading data to DESeq2 - Create DESeq2 object
-# dds_mat <- convertTo(sce, type="DESeq2", assay.type = 1)
+# Now proceed with DESeq2
+# Loading data to DESeq2 - Create DESeq2 object
+dds_mat <- convertTo(sce, type="DESeq2", assay.type = 1)
 
-# dds <- DESeq(dds_mat)
-# res <- results(dds)
+dds <- DESeq(dds_mat)
+res <- results(dds)
 
-#head(results(dds, tidy = TRUE))
-#summary(res) # summary of results
+head(results(dds, tidy = TRUE))
+summary(res) # summary of results
 
-# vsd <- vst(dds_mat, blind = FALSE)
-# res_vsd <- cbind(as.data.frame(res), assay(vsd))
-# dge_dds <- as.data.frame(res_vsd[order(res_vsd$pvalue), ])
-# #head(dge_dds, 10)
-# print("deseq2 done")
+vsd <- vst(dds_mat, blind = FALSE)
+res_vsd <- cbind(as.data.frame(res), assay(vsd))
+dge_dds <- as.data.frame(res_vsd[order(res_vsd$pvalue), ])
+#head(dge_dds, 10)
+print("deseq2 done")
 # ------------------------ Outfiles ------------------------------------------
 # Write to file
-# write.csv(dge_dds,  gzfile("/home/people/laucom/CoDA_scRNAseq/SC_deseq2_DE.csv.gz"), row.names = TRUE)
+write.csv(dge_dds,  gzfile("/home/people/laucom/CoDA_scRNAseq/SC_deseq2_DE.csv.gz"), row.names = TRUE)
 # Write to file
 # write.csv(res_edgeR, gzfile("/home/people/laucom/CoDA_scRNAseq/SC_edgeR_DE.csv.gz"), row.names = TRUE)
 
@@ -163,27 +163,27 @@ print("sc experiment done")
 # ----------------------------------------------------------------------------
 # no use of Single Cell Experiment
 # the BioCManager packages need to be loaded always after the data wrangling because they interfere
-library("ALDEx2")
-print("loaded ALDEx2")
-conds <- metadata$cell_ontology_class
-print(head(conds))
-x.all <- aldex(annotated_genes_counts, conds, mc.samples=50, test="t", effect=TRUE,include.sample.summary=FALSE, denom="all", verbose=FALSE)
-print("x.all done")
+# library("ALDEx2")
+# print("loaded ALDEx2")
+# conds <- metadata$cell_ontology_class
+# print(head(conds))
+# x.all <- aldex(annotated_genes_counts, conds, mc.samples=50, test="t", effect=TRUE,include.sample.summary=FALSE, denom="all", verbose=FALSE)
+# print("x.all done")
 
-# Write to file
-write.csv(x.all, "/home/people/laucom/CoDA_scRNAseq/results/SC/aldex2_DE.csv", row.names = TRUE)
-print("files DE aldex done")
-# clr
-x <- aldex.clr(annotated_genes_counts, conds, mc.samples=50, denom="all", verbose=F)
-print("files pre-clr done")
-x_df <- data.frame(x@analysisData)
+# # Write to file
+# write.csv(x.all, "/home/people/laucom/CoDA_scRNAseq/results/SC/aldex2_DE.csv", row.names = TRUE)
+# print("files DE aldex done")
+# # clr
+# x <- aldex.clr(annotated_genes_counts, conds, mc.samples=50, denom="all", verbose=F)
+# print("files pre-clr done")
+# x_df <- data.frame(x@analysisData)
 
-# now reduce the columns to one
-library(stringr)
-nm1 <- str_replace(names(x_df),"\\..*", "")
-x.new <- data.frame
-x_df[paste0(unique(nm1), "_mean")] <- sapply(split.default(x_df, nm1), rowMeans)
-x.new <- x_df[grep("_mean", names(x_df))] 
-write.csv(x.new, "/home/people/laucom/CoDA_scRNAseq/SC/aldex2_clr.csv", row.names = TRUE)
+# # now reduce the columns to one
+# library(stringr)
+# nm1 <- str_replace(names(x_df),"\\..*", "")
+# x.new <- data.frame
+# x_df[paste0(unique(nm1), "_mean")] <- sapply(split.default(x_df, nm1), rowMeans)
+# x.new <- x_df[grep("_mean", names(x_df))] 
+# write.csv(x.new, "/home/people/laucom/CoDA_scRNAseq/SC/aldex2_clr.csv", row.names = TRUE)
 
-print("files CLR aldex done")
+# print("files CLR aldex done")
