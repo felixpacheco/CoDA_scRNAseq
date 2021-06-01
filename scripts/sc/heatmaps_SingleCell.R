@@ -78,7 +78,7 @@ dev.off()
 
 # what if we do the same after DESEQ normalization and EDGER
 # open the files
-deseq_norm <- read_csv("/home/projects/cge/people/laucom/CoDA_scRNAseq/results/SC/SC_deseq2_DE_new.csv.gz")
+dds_norm <- read_csv("/home/projects/cge/people/laucom/CoDA_scRNAseq/results/SC/SC_deseq2_DE_new.csv.gz")
 edge_norm <- read_csv("/home/projects/cge/people/laucom/CoDA_scRNAseq/results/SC/SC_edgeR_DE.csv.gz")
 
 
@@ -89,8 +89,8 @@ edge_norm <- read_csv("/home/projects/cge/people/laucom/CoDA_scRNAseq/results/SC
 
 # do the same plot as before:
 # sort the same
-dds_norm <- dds_norm %>% arrange(X)
-edge_norm <- edge_norm %>% arrange(X)
+dds_norm <- dds_norm %>% arrange(X1)
+edge_norm <- edge_norm %>% arrange(X1)
 
 # clean data
 row.names(dds_norm) <- dds_norm$X1
