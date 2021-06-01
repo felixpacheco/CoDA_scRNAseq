@@ -205,13 +205,13 @@ dev.off()
 
 
 require(gridExtra)
-png("heatmap_1.png", height = 2100, width = 2100)
+png("/home/projects/cge/people/laucom/CoDA_scRNAseq/heatmap_1.png", height = 2100, width = 2100)
 grid.arrange(p1, p2, p3, p4, ncol = 2, nrow=2)
 dev.off()
 
 
 require("egg")
-png("heatmap_2.png", height = 2100, width = 2100)
+png("/home/projects/cge/people/laucom/CoDA_scRNAseq/heatmap_2.png", height = 2100, width = 2100)
 ggarrange(p1, p2, p3, p4, ncol = 2, nrow=2)
 dev.off()
 
