@@ -63,9 +63,9 @@ long_random_raw_counts <- long_random_raw_counts %>% mutate(norm = (Counts - min
 # Now create the normalized 0-1 column:
 
 png(file = "heatmap_raw_counts.png", height = 7, width = 10, units = "in", res = 300)
-p1 <- ggplot(long_random_raw_counts, aes(y = colname, x = rowname, fill = norm)) +
+p1 <- ggplot(long_random_raw_counts, aes(x = colname, y = rowname, fill = norm)) +
   geom_tile() +
-  labs(y = "Patient ID", x = "Gene ID", tag = "A", fill = "Counts") +
+  labs(x = "Patient ID", y = "Gene ID", tag = "A", fill = "Counts") +
   theme(
     axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
     legend.position = "none", text = element_text(size = 20)
