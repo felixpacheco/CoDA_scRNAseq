@@ -3,7 +3,7 @@ rm(list=ls())
 library("tidyverse")
 library("xtable")
 library("viridis")
-library("hrbrthemes")
+require("hrbrthemes")
 # -------------------- Read the data ----------------------------------------
 sc_counts <- read_csv("/home/projects/cge/people/laucom/CoDA_scRNAseq/data/singlecell/counts_sc.csv.gz")
 metadata <- read_csv("/home/projects/cge/people/laucom/CoDA_scRNAseq/data/singlecell/metadata_sc.csv.gz")
