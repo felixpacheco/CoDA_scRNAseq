@@ -50,7 +50,7 @@ cols <- sample(1:ncol(annotated_genes_counts), 50)
 rows <- sample(1:nrow(annotated_genes_counts), 50)
 
 # First pick random cols and rows
-annotated_genes_counts <- annotated_genes_counts.sort_index()
+#annotated_genes_counts <- annotated_genes_counts.sort_index()
 random_raw_counts <- annotated_genes_counts[rows, cols]
 
 # We need a long dataframe to plot the heatmap
