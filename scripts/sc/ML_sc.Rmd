@@ -25,6 +25,7 @@ library(stringr)
 raw_counts <- read.csv("/home/people/felpas/CoDA_scRNAseq/data/singlecell/counts_sc.csv.gz", sep = ",")
 metadata <- fread("/home/people/felpas/CoDA_scRNAseq/data/singlecell/metadata_sc.csv.gz", header=TRUE)
 
+aldex_counts <- read.csv("/home/people/felpas/SC_aldex2_clr.csv.gz", sep = ",", header=TRUE)
 clr_counts <- read.csv("/home/people/felpas/clr_sc.csv.gz", sep = ",")
 deseq_counts <- read.csv("/home/people/felpas/SC_deseq2_DE.csv.gz", sep = ",", header=TRUE)
 edge_counts <- read.csv("/home/people/felpas/SC_edgeR_DE.csv.gz", sep = ",", header=TRUE)
@@ -41,7 +42,7 @@ metadata$label <- paste(metadata$celltype, metadata$rows, sep="_")
 
 ### RAW COUNTS
 # Drop X column and remove genes with 0 counts everywhere
-#raw_counts = subset(raw_counts, select = -c(X))
+raw_counts = subset(raw_counts, select = -c(X))
 raw_counts<- raw_counts[apply(raw_counts[,-1], 1, function(x) !all(x==0)),]
 
 # Replace colnames for metadata$labels
@@ -56,13 +57,13 @@ colnames(raw_counts) <- labels_list
 ### DESEQ AND EDGE : Delete non relevant columns
 deseq_counts <- subset(deseq_counts, select = -c(baseMean,log2FoldChange,lfcSE, stat,pvalue,padj))
 edge_counts <- subset(edge_counts, select = -c(logCPM,PValue,dispersion, logFC,LR,FDR))
+aldex_counts <- 
 
 # Replace colnames for metadata$labels for deseq2
 labels_list_deseq <- c("gene_name")
 columnnames_deseq <- colnames(deseq_counts)
 for (i in columnnames_deseq) {
   new_element <- metadata[ metadata$cell == i, ]$label
-  print(new_element)
   labels_list_deseq <- c(labels_list_deseq, new_element)
 }
 colnames(deseq_counts) <- labels_list_deseq
@@ -86,6 +87,15 @@ for (i in columnnames_clr) {
   labels_list_clr <- c(labels_list_clr, new_element)
 }
 colnames(clr_counts) <- labels_list_clr
+
+# Replace colnames for metadata$labels for ALDEx2 values
+labels_list_aldex <- c("gene_name")
+columnnames_aldex <- colnames(aldex_counts)
+for (i in columnnames_aldex) {
+  new_element <- metadata[ metadata$cell == i, ]$label
+  labels_list_aldex <- c(labels_list_aldex, new_element)
+}
+colnames(aldex_counts) <- labels_list_aldex
 
 # Transpose counts matrix
 
@@ -212,34 +222,34 @@ cat("\n")
 }
 
 ### ---------- ALDEx2 DATA -----------
-# Compute k-means
-#res_means_aldex = kmeans(aldex_counts_t, centers = 2, nstart = 20)
+ Compute k-means
+res_means_aldex = kmeans(aldex_counts_t, centers = 2, nstart = 20)
 
 # Process output
-#res_viz_aldex <- as.data.frame(res_means_aldex$cluster)
-#names(res_viz_aldex)[1] <- "cluster"
-#res_viz_aldex <- cbind(sample_name = rownames(res_viz_aldex), res_viz_aldex)
-#rownames(res_viz_aldex) <- 1:nrow(res_viz_aldex)
+res_viz_aldex <- as.data.frame(res_means_aldex$cluster)
+names(res_viz_aldex)[1] <- "cluster"
+res_viz_aldex <- cbind(sample_name = rownames(res_viz_aldex), res_viz_aldex)
+rownames(res_viz_aldex) <- 1:nrow(res_viz_aldex)
 
-#res_viz_aldex$phenotype <- str_sub(res_viz_aldex$sample_name, 5)
-#res_viz_aldex$phenotype <- str_sub(res_viz_aldex$phenotype, start=1,end=1)
+res_viz_aldex$phenotype <- str_sub(res_viz_aldex$sample_name, 5)
+res_viz_aldex$phenotype <- str_sub(res_viz_aldex$phenotype, start=1,end=1)
 
-#a1T <- nrow(res_viz_aldex[res_viz_aldex$cluster==1 & res_viz_aldex$phenotype=="f",])/nrow(res_viz_aldex[res_viz_aldex$cluster==1,]) 
-#a1N <- nrow(res_viz_aldex[res_viz_aldex$cluster==1 & res_viz_aldex$phenotype=="m",])/nrow(res_viz_aldex[res_viz_aldex$cluster==1,]) 
-#a2N <- nrow(res_viz_aldex[res_viz_aldex$cluster==2 & res_viz_aldex$phenotype=="m",])/nrow(res_viz_aldex[res_viz_aldex$cluster==2,]) 
-#a2T <- nrow(res_viz_aldex[res_viz_aldex$cluster==2 & res_viz_aldex$phenotype=="f",])/nrow(res_viz_aldex[res_viz_aldex$cluster==2,]) 
+a1T <- nrow(res_viz_aldex[res_viz_aldex$cluster==1 & res_viz_aldex$phenotype=="f",])/nrow(res_viz_aldex[res_viz_aldex$cluster==1,]) 
+a1N <- nrow(res_viz_aldex[res_viz_aldex$cluster==1 & res_viz_aldex$phenotype=="m",])/nrow(res_viz_aldex[res_viz_aldex$cluster==1,]) 
+a2N <- nrow(res_viz_aldex[res_viz_aldex$cluster==2 & res_viz_aldex$phenotype=="m",])/nrow(res_viz_aldex[res_viz_aldex$cluster==2,]) 
+a2T <- nrow(res_viz_aldex[res_viz_aldex$cluster==2 & res_viz_aldex$phenotype=="f",])/nrow(res_viz_aldex[res_viz_aldex$cluster==2,]) 
 
-#if (a1T>a1N) {
-#cat("ALDEx2 data -- Cluster purity:\n\tCluster 1:")
-#cat(a1T)
-#cat("\n\tCluster 2:")
-#cat(a2N)
-#} else {
-#cat("ALDEx2 data -- Cluster purity:\n\tCluster 1:")
-#cat(a1N)
-#cat("\n\tCluster 2:")
-#cat(a2T)
-#}
+if (a1T>a1N) {
+cat("ALDEx2 data -- Cluster purity:\n\tCluster 1:")
+cat(a1T)
+cat("\n\tCluster 2:")
+cat(a2N)
+} else {
+cat("ALDEx2 data -- Cluster purity:\n\tCluster 1:")
+cat(a1N)
+cat("\n\tCluster 2:")
+cat(a2T)
+}
 
 ### ---------- CLR DATA -----------
 # Compute k-means
@@ -446,6 +456,8 @@ ggplot(ind.coord, aes(x=Dim.1, y=Dim.2, shape=label, color=label)) +
 
 # RAW DATA
 set.seed(1996)
+raw_counts_t <- as.data.frame(lapply(raw_counts_t, as.numeric))
+raw_counts_t[is.na(raw_counts_t)] <- 0
 ran <- sample(1:nrow(raw_counts_t), 0.9 * nrow(raw_counts_t)) 
  
 ##extract training set
@@ -463,7 +475,7 @@ library(class)
 
 accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
 
-k_to_try = 1:35
+k_to_try = 1
 err_k_raw = rep(x = 0, times = length(k_to_try))
 
 for (i in seq_along(k_to_try)) {

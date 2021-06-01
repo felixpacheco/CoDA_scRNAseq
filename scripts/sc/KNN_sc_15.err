@@ -1,0 +1,34 @@
+Loading intel/perflibs/2020_update4
+  ERROR: intel/perflibs/2020_update4 cannot be loaded due to a conflict.
+    HINT: Might try "module unload intel/perflibs" first.
+-- Attaching packages --------------------------------------- tidyverse 1.3.1 --
+v ggplot2 3.3.3     v purrr   0.3.4
+v tibble  3.1.2     v dplyr   1.0.6
+v tidyr   1.1.3     v stringr 1.4.0
+v readr   1.4.0     v forcats 0.5.1
+-- Conflicts ------------------------------------------ tidyverse_conflicts() --
+x dplyr::filter() masks stats::filter()
+x dplyr::lag()    masks stats::lag()
+
+Attaching package: 'janitor'
+
+The following objects are masked from 'package:stats':
+
+    chisq.test, fisher.test
+
+Welcome! Want to learn more? See two factoextra-related books at https://goo.gl/ve3WBa
+
+Attaching package: 'data.table'
+
+The following objects are masked from 'package:dplyr':
+
+    between, first, last
+
+The following object is masked from 'package:purrr':
+
+    transpose
+
+There were 13 warnings (use warnings() to see them)
+Error in plot.new() : figure margins too large
+Calls: plot -> plot.default -> plot.new
+Execution halted

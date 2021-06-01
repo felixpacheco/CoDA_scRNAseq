@@ -3,10 +3,10 @@
 ### Account information
 #PBS -W group_list=cge -A cge
 ### Job name (comment out the next line to get the name of the script used as the job name)
-#PBS -N sc_run
+#PBS -N aldex_k_sc_pca
 ### Output files (comment out the next 2 lines to get the job name used instead)
-#PBS -e sc_run.err
-#PBS -o sc_run.log
+#PBS -e aldex_k_sc_pca.err
+#PBS -o aldex_k_sc_pca.log
 ### Only send mail when job is aborted or terminates abnormally
 #PBS -m n
 ### Number of nodes
@@ -14,7 +14,7 @@
 ### Memory
 #PBS -l mem=120gb
 ### Requesting time - format is <days>:<hours>:<minutes>:<seconds> (here, 12 hours)
-#PBS -l walltime=20:00:00
+#PBS -l walltime=48:00:00
   
 # Go to the directory from where the job was submitted (initial directory is $HOME)
 echo Working directory is $PBS_O_WORKDIR
@@ -34,4 +34,4 @@ module load R/4.1.0
 # This is where the work is done
 # Make sure that this script is not bigger than 64kb ~ 150 lines, otherwise put in seperat script and execute from here
 pwd
-Rscript /home/people/laucom/CoDA_scRNAseq/scripts/sc/KNN_sc.R 
+Rscript /home/people/felpas/CoDA_scRNAseq/scripts/sc/kmeans_aldex_sc.R
