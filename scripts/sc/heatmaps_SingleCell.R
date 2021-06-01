@@ -157,7 +157,7 @@ dev.off()
 # --------- now with ALDEx2 ------------
 # what if we do the same after DESEQ normalization and EDGER
 # open the files
-aldex_norm <- read_csv("/home/projects/cge/people/laucom/CoDA_scRNAseq/results/SC/aldex2_clr.csv")
+aldex_norm <- read_csv("/home/projects/cge/people/laucom/CoDA_scRNAseq/results/SC/aldex2_clr.csv.gz")
 
 # do the same plot as before:
 # sort the same
