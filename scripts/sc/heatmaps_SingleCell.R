@@ -27,7 +27,7 @@ genes_names <- sc_counts$external_gene_name
 #             filters = 'mgi_symbol',
 #             values = genes_names,
 #             mart = ensembl)
-IDs <- read_csv("/Users/laurasansc/github/CoDA_scRNAseq/data/martquery_0530110047_39.txt.gz")
+IDs <- read_csv("/home/projects/cge/people/laucom/CoDA_scRNAseq/data/martquery_0530110047_39.txt.gz")
 names(IDs)[names(IDs) == 'Gene stable ID'] <- 'ensembl_gene_id'
 names(IDs)[names(IDs) == 'Gene name'] <- 'external_gene_name'
 
